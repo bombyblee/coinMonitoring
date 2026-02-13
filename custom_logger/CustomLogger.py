@@ -51,7 +51,7 @@ class Logger(object):
         :return: file handler
         """
         # 로그 경로 지정
-        logpath = os.path.dirname(__file__) + '/' + self.filename
+        logpath = os.path.dirname(__file__) + '/logs/' + self.filename 
         logdir = os.path.dirname(logpath)
         if not os.path.exists(logdir):
             # 경로에 폴더가 없으면 폴더 생성
