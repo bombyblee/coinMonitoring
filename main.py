@@ -1,21 +1,27 @@
-import asyncio
-from telegram import Bot
-from telegram.ext import Application, CommandHandler
 import os
-from crypto.config import load_config
-from crypto.jobs.report_state import ReportState
-from crypto.jobs.reporter_job import FuturesReporterJob
-from messenger_bot.TelegramBot import TelegramBot
-from messenger_bot.telegram_commands import make_handlers
-from crypto.binance.futures_trader import BinanceFuturesTrader
-from crypto.orders.service import OrderService, RiskConfig
-from messenger_bot.trade_commands import make_trade_text_handler
-from telegram.ext import MessageHandler, filters
-from crypto.binance.user_stream import UserDataStream
-from crypto.orders.fill_notifier import handle_user_stream_message
-from messenger_bot.freq_commands import make_freq_text_handler
-from crypto.jobs.pnl_reporter import PnlReporterJob
+import asyncio
 
+from telegram import Bot
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from messenger_bot.telegram_commands import make_handlers
+
+from crypto.config import load_config
+from crypto.binance.futures_market_api import BinanceFuturesMarketApi
+from crypto.binance.futures_trader import BinanceFuturesTrader
+from crypto.binance.user_stream import UserDataStream
+
+from crypto.orders.service import OrderService, RiskConfig
+from crypto.orders.fill_notifier import handle_user_stream_message
+
+from crypto.jobs import ReportState, FuturesReporterJob, PnlReporterJob
+
+from messenger_bot import (
+    TelegramBot,
+    make_telegram_handlers,
+    make_text_router,
+    make_trade_text_handler,
+    make_freq_text_handler,
+)
 
 async def main():
     cfg = load_config()
@@ -58,31 +64,43 @@ async def main():
     await uds.start(on_user_stream)
 
     # (B) 가격/리포트 잡
+    market_api = BinanceFuturesMarketApi()
+
     price_job = FuturesReporterJob(
         symbol=cfg.symbol,
         messenger=messenger,
         state=state,
-    )
-    await price_job.start(cfg.telegram_chat_id)
+        market_api=market_api
+     ) 
+    #await price_job.start(cfg.telegram_chat_id)
     
-    pnl_job = PnlReporterJob(trader=trader, messenger=messenger, state=state)
+    pnl_job = PnlReporterJob(
+        trader=trader,
+        messenger=messenger,
+        state=state,
+        market_api=market_api,  # ✅ 추가
+    )
     await pnl_job.start(cfg.telegram_chat_id)
 
     # trade handler 생성
     order_service = OrderService(trader, risk)
     trade_handler = make_trade_text_handler(order_service, messenger)
-    
 
     # freq 텍스트 핸들러 (주기 변경)
     freq_handler = make_freq_text_handler(
         state=state,
-        price_job=price_job,
+        price_job=None,  # price_job은 안씀
         pnl_job=pnl_job,
         messenger=messenger,
         chat_id_getter=lambda u: str(u.effective_chat.id),
     )
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), freq_handler))
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), trade_handler))
+    
+    # text_router 생성 (각 명령어 핸들러 라우팅)
+    text_router = make_text_router(
+        trade_handler=trade_handler,
+        freq_handler=freq_handler,
+    )
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), text_router))
 
     # 앱 초기화 & 폴링 시작 (async 방식)
     await app.initialize()

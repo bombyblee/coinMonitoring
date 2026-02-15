@@ -28,3 +28,12 @@ class BinanceFuturesMarketApi:
             funding_rate=funding_rate,
             next_funding_time=nft,
         )
+    
+    def fetch_last_price(self, symbol: str) -> float:
+        """
+        last/lastPrice만 가져오는 함수로 래핑.
+        네가 쓰는 실제 client 메서드명에 맞춰 수정해.
+        """
+        t = self.http.get("/fapi/v1/ticker/price", params={"symbol": symbol})
+        last_price = float(t["price"])
+        return last_price
