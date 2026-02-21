@@ -3,7 +3,7 @@ import asyncio
 
 from telegram import Bot
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from messenger_bot.telegram_commands import make_handlers
+from messenger_bot.telegram_commands import make_handlers, make_orders_handler, make_help_handler
 
 from crypto.config import load_config
 from crypto.binance.futures_market_api import BinanceFuturesMarketApi
@@ -21,7 +21,9 @@ from messenger_bot import (
     make_text_router,
     make_trade_text_handler,
     make_freq_text_handler,
+    make_sl_tp_handler,
 )
+from crypto.orders.sl_tp_monitor import SlTpMonitor
 
 async def main():
     cfg = load_config()
@@ -94,11 +96,21 @@ async def main():
         messenger=messenger,
         chat_id_getter=lambda u: str(u.effective_chat.id),
     )
-    
+
+    # sl/tp 모니터 & 핸들러
+    sl_tp_monitor = SlTpMonitor(trader=trader, messenger=messenger, poll_interval=5.0)
+    await sl_tp_monitor.start()
+    sl_tp_handler = make_sl_tp_handler(sl_tp_monitor, messenger)
+
+    # /orders, /help 커맨드 핸들러
+    app.add_handler(CommandHandler("orders", make_orders_handler(trader, messenger)))
+    app.add_handler(CommandHandler("help", make_help_handler(messenger)))
+
     # text_router 생성 (각 명령어 핸들러 라우팅)
     text_router = make_text_router(
         trade_handler=trade_handler,
         freq_handler=freq_handler,
+        sl_tp_handler=sl_tp_handler,
     )
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), text_router))
 
@@ -114,6 +126,7 @@ async def main():
         pass
     finally:
         await uds.stop()
+        await sl_tp_monitor.stop()
         await pnl_job.stop()
         await price_job.stop()
         await app.updater.stop()

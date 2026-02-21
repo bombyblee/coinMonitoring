@@ -12,6 +12,7 @@ HandlerFn = Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[None]]
 class RouterDeps:
     freq_handler: Optional[HandlerFn] = None
     trade_handler: Optional[HandlerFn] = None
+    sl_tp_handler: Optional[HandlerFn] = None
     fallback_handler: Optional[HandlerFn] = None
 
 
@@ -24,6 +25,7 @@ def make_text_router(**kwargs) -> HandlerFn:
     deps = RouterDeps(
         freq_handler=kwargs.get("freq_handler"),
         trade_handler=kwargs.get("trade_handler"),
+        sl_tp_handler=kwargs.get("sl_tp_handler"),
         fallback_handler=kwargs.get("fallback_handler"),
     )
 
@@ -60,6 +62,15 @@ def make_text_router(**kwargs) -> HandlerFn:
                 await update.message.reply_text("주문 기능이 아직 초기화되지 않았어요. (trade_handler=None)")
                 return
             await deps.trade_handler(update, context)
+            return
+
+        # sl/tp: "sltp ..." 또는 "<숫자> tp|sl ..."
+        import re as _re
+        if lowered.startswith("sltp") or _re.match(r"^\d+\s+(tp|sl)\s+", lowered):
+            if deps.sl_tp_handler is None:
+                await update.message.reply_text("SL/TP 기능이 아직 초기화되지 않았어요. (sl_tp_handler=None)")
+                return
+            await deps.sl_tp_handler(update, context)
             return
 
         await fallback(update, context)

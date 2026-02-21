@@ -100,15 +100,19 @@ class PnlReporterJob(ReporterJobBase):
             lines.append("positions: (none)")
         else:
             lines.append("positions:")
-            for sym, amt, entry, u, lev, liq in live:
+            for i, (sym, amt, entry, u, lev, liq) in enumerate(live, start=1):
                 last = last_map.get(sym)
                 # last가 없거나 nan이면 '?' 처리
                 if last is None or (isinstance(last, float) and last != last):  # nan 체크
                     last_str = "?"
+                    ref_price = entry
                 else:
                     last_str = f"{last}"
+                    ref_price = last
+                # positionAmt(코인 단위)를 USDT 기준으로 변환
+                amt_usdt = amt * ref_price
                 lines.append(
-                    f"- {sym} amt={amt} entry={entry} last={last_str} uPnL={u:.2f} lev={lev} liq={liq}"
+                    f"{i}. {sym} amt={amt_usdt:.2f}U entry={entry} last={last_str} uPnL={u:.2f} lev={lev} liq={liq}"
                 )
 
         await self.messenger.post_message(chat_id, "\n".join(lines))
