@@ -22,8 +22,10 @@ from messenger_bot import (
     make_trade_text_handler,
     make_freq_text_handler,
     make_sl_tp_handler,
+    make_watchlist_handler,
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
+from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob
 
 async def main():
     cfg = load_config()
@@ -102,6 +104,15 @@ async def main():
     await sl_tp_monitor.start()
     sl_tp_handler = make_sl_tp_handler(sl_tp_monitor, messenger)
 
+    # (C) OHLCV 워치리스트 & 잡
+    watchlist = Watchlist(
+        os.getenv("WATCHLIST_SYMBOLS", "BTCUSDT,ETHUSDT").split(",")
+    )
+    ohlcv_store = OhlcvStore(max_len=500)
+    ohlcv_job = OhlcvJob(watchlist=watchlist, store=ohlcv_store)
+    await ohlcv_job.start()
+    wl_handler = make_watchlist_handler(watchlist, ohlcv_job)
+
     # /orders, /help 커맨드 핸들러
     app.add_handler(CommandHandler("orders", make_orders_handler(trader, messenger)))
     app.add_handler(CommandHandler("help", make_help_handler(messenger)))
@@ -111,6 +122,7 @@ async def main():
         trade_handler=trade_handler,
         freq_handler=freq_handler,
         sl_tp_handler=sl_tp_handler,
+        watchlist_handler=wl_handler,
     )
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), text_router))
 
@@ -127,6 +139,7 @@ async def main():
     finally:
         await uds.stop()
         await sl_tp_monitor.stop()
+        await ohlcv_job.stop()
         await pnl_job.stop()
         await price_job.stop()
         await app.updater.stop()

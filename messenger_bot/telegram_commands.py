@@ -50,6 +50,14 @@ _HELP_TEXT = """\
   sltp cancel <ID>   로컬 트리거 취소
 
 ──────────────────────────
+📈 워치리스트 (OHLCV 1분봉 자동 수집)
+  watchlist              현재 목록 조회
+  watchlist add <심볼>   심볼 추가 (최대 10개)
+    예) watchlist add SOLUSDT
+  watchlist del <심볼>   심볼 제거
+    예) watchlist del SOLUSDT
+
+──────────────────────────
 ⚙️ 설정
   freq <초>          PnL 리포트 주기 변경
     예) freq 300\

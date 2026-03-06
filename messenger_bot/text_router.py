@@ -13,6 +13,7 @@ class RouterDeps:
     freq_handler: Optional[HandlerFn] = None
     trade_handler: Optional[HandlerFn] = None
     sl_tp_handler: Optional[HandlerFn] = None
+    watchlist_handler: Optional[HandlerFn] = None
     fallback_handler: Optional[HandlerFn] = None
 
 
@@ -26,6 +27,7 @@ def make_text_router(**kwargs) -> HandlerFn:
         freq_handler=kwargs.get("freq_handler"),
         trade_handler=kwargs.get("trade_handler"),
         sl_tp_handler=kwargs.get("sl_tp_handler"),
+        watchlist_handler=kwargs.get("watchlist_handler"),
         fallback_handler=kwargs.get("fallback_handler"),
     )
 
@@ -62,6 +64,14 @@ def make_text_router(**kwargs) -> HandlerFn:
                 await update.message.reply_text("주문 기능이 아직 초기화되지 않았어요. (trade_handler=None)")
                 return
             await deps.trade_handler(update, context)
+            return
+
+        # watchlist
+        if lowered.startswith("watchlist"):
+            if deps.watchlist_handler is None:
+                await update.message.reply_text("워치리스트 기능이 초기화되지 않았어요.")
+                return
+            await deps.watchlist_handler(update, context)
             return
 
         # sl/tp: "sltp ..." 또는 "<숫자> tp|sl ..."

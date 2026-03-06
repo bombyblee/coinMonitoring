@@ -4,6 +4,7 @@ from .text_router import make_text_router
 from .trade_commands import make_trade_text_handler
 from .freq_commands import make_freq_text_handler
 from .sl_tp_commands import make_sl_tp_handler
+from .watchlist_commands import make_watchlist_handler
 
 __all__ = [
     "TelegramBot",
@@ -12,4 +13,5 @@ __all__ = [
     "make_trade_text_handler",
     "make_freq_text_handler",
     "make_sl_tp_handler",
+    "make_watchlist_handler",
 ]
