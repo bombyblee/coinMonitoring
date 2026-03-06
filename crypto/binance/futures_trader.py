@@ -43,43 +43,62 @@ class BinanceFuturesTrader:
         return await asyncio.to_thread(_call)
 
     async def new_take_profit_order(self, symbol: str, side: str, stop_price: float) -> dict:
-        """TAKE_PROFIT_MARKET 주문 (closePosition=true). 가격 기준 TP에서 사용.
+        """TAKE_PROFIT_MARKET 알고 주문 (POST /fapi/v1/algoOrder, 2025-12-09 이후 필수).
         side: 포지션 청산 방향 (LONG→SELL, SHORT→BUY)
-        stop_price: 트리거 가격 (MARK_PRICE 기준)
+        stop_price: 트리거 가격
         """
         def _call():
-            return self.client.new_order(
-                symbol=symbol,
-                side=side,
-                type="TAKE_PROFIT_MARKET",
-                stopPrice=stop_price,
-                closePosition="true",
-                workingType="MARK_PRICE",
+            return self.client.sign_request(
+                "POST",
+                "/fapi/v1/algoOrder",
+                {
+                    "algoType": "CONDITIONAL",
+                    "symbol": symbol,
+                    "side": side,
+                    "type": "TAKE_PROFIT_MARKET",
+                    "triggerPrice": stop_price,
+                    "closePosition": "true",
+                    "workingType": "MARK_PRICE",
+                },
             )
         return await asyncio.to_thread(_call)
 
     async def new_stop_loss_order(self, symbol: str, side: str, stop_price: float) -> dict:
-        """STOP_MARKET 주문 (closePosition=true). 가격 기준 SL에서 사용.
+        """STOP_MARKET 알고 주문 (POST /fapi/v1/algoOrder, 2025-12-09 이후 필수).
         side: 포지션 청산 방향 (LONG→SELL, SHORT→BUY)
-        stop_price: 트리거 가격 (MARK_PRICE 기준)
+        stop_price: 트리거 가격
         """
         def _call():
-            return self.client.new_order(
-                symbol=symbol,
-                side=side,
-                type="STOP_MARKET",
-                stopPrice=stop_price,
-                closePosition="true",
-                workingType="MARK_PRICE",
+            return self.client.sign_request(
+                "POST",
+                "/fapi/v1/algoOrder",
+                {
+                    "algoType": "CONDITIONAL",
+                    "symbol": symbol,
+                    "side": side,
+                    "type": "STOP_MARKET",
+                    "triggerPrice": stop_price,
+                    "closePosition": "true",
+                    "workingType": "MARK_PRICE",
+                },
             )
         return await asyncio.to_thread(_call)
 
     async def get_open_orders(self, symbol: str = None) -> list:
-        """현재 오픈 주문 조회 (/fapi/v1/openOrders). symbol 미지정 시 전체 심볼."""
+        """일반 오픈 주문 + 알고 오픈 주문 합산 조회."""
         def _call():
-            if symbol:
-                return self.client.get_open_orders(symbol=symbol)
-            return self.client.get_open_orders()
+            params = {"symbol": symbol} if symbol else {}
+            regular = self.client.get_open_orders(**params)
+
+            algo_resp = self.client.sign_request("GET", "/fapi/v1/openAlgoOrders", params)
+            algo_orders = algo_resp.get("orders", []) if isinstance(algo_resp, dict) else []
+
+            # 알고 주문 필드를 일반 주문 형식으로 정규화
+            for o in algo_orders:
+                o.setdefault("orderId", o.get("algoId", ""))
+                o.setdefault("stopPrice", o.get("triggerPrice", "0"))
+            return regular + algo_orders
+
         return await asyncio.to_thread(_call)
 
     async def exchange_info(self) -> dict:

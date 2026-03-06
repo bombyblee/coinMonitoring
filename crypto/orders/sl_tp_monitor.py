@@ -82,7 +82,7 @@ class SlTpMonitor:
         else:  # SL
             resp = await self.trader.new_stop_loss_order(symbol, close_side, stop_price)
 
-        order_id = resp.get("orderId", "?")
+        order_id = resp.get("algoId") or resp.get("orderId", "?")
         return (
             f"✅ {intent.direction} 주문 전송 (Binance)\n"
             f"포지션: #{intent.pos_index} {symbol} ({pos_side})\n"
