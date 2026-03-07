@@ -16,6 +16,7 @@ class MomentumBurst(BaseStrategy):
     """
 
     name = "MomentumBurst"
+    timeframe = "5min"
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         if len(df) < 20:

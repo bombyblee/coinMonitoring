@@ -18,6 +18,7 @@ class Signal:
 
 class BaseStrategy:
     name: str = "base"
+    timeframe: str = "1min"   # runner가 리샘플링에 사용 ("1min" = 원본 그대로)
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         """

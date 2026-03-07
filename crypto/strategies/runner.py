@@ -5,13 +5,28 @@ import logging
 import time
 from typing import Optional
 
+import pandas as pd
+
 from crypto.market_data import OhlcvStore
+from crypto.market_data.ohlcv_store import _compute as _compute_indicators
 from .base import BaseStrategy, Signal
 
 logger = logging.getLogger(__name__)
 
 _COOLDOWN_SEC = 300   # 같은 심볼+방향 시그널 재알림 최소 간격 (5분)
 _START_OFFSET = 10    # OhlcvJob 업데이트 후 데이터 준비 대기 (초)
+
+
+def _resample(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
+    """1분봉 df를 지정 timeframe으로 리샘플링하고 지표 재계산."""
+    base = df[["open", "high", "low", "close", "volume"]].resample(timeframe).agg(
+        open=("open", "first"),
+        high=("high", "max"),
+        low=("low", "min"),
+        close=("close", "last"),
+        volume=("volume", "sum"),
+    ).dropna()
+    return _compute_indicators(base)
 
 
 class StrategyRunner:
@@ -89,7 +104,8 @@ class StrategyRunner:
                 continue
             for strategy in self.strategies:
                 try:
-                    signal = strategy.detect(symbol, df)
+                    df_s = _resample(df, strategy.timeframe) if strategy.timeframe != "1min" else df
+                    signal = strategy.detect(symbol, df_s)
                     if signal:
                         await self._maybe_notify(signal)
                 except Exception as e:

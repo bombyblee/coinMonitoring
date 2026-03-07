@@ -16,6 +16,7 @@ class EmaCross(BaseStrategy):
     """
 
     name = "EmaCross"
+    timeframe = "5min"
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         if len(df) < 21:
