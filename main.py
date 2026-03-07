@@ -23,9 +23,13 @@ from messenger_bot import (
     make_freq_text_handler,
     make_sl_tp_handler,
     make_watchlist_handler,
+    make_signal_handler,
+    make_strategy_handler,
+    make_strategy_cmd,
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
 from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob
+from crypto.strategies import MomentumBurst, StrategyRunner, SignalExecutor,  RsiReversal, EmaCross
 
 async def main():
     cfg = load_config()
@@ -113,9 +117,30 @@ async def main():
     await ohlcv_job.start()
     wl_handler = make_watchlist_handler(watchlist, ohlcv_job)
 
-    # /orders, /help 커맨드 핸들러
+    signal_executor = SignalExecutor(
+        order_service=order_service,
+        trader=trader,
+        store=ohlcv_store,
+        messenger=messenger,
+        chat_id=cfg.telegram_chat_id,
+        auto_usdt=float(os.getenv("AUTO_TRADE_USDT", "50")),
+    )
+
+    strategy_runner = StrategyRunner(
+        store=ohlcv_store,
+        strategies=[MomentumBurst(), RsiReversal(), EmaCross()],
+        messenger=messenger,
+        chat_id=cfg.telegram_chat_id,
+        executor=signal_executor,
+    )
+    await strategy_runner.start()
+    signal_hdl = make_signal_handler(signal_executor, messenger)
+    strategy_hdl = make_strategy_handler(strategy_runner, messenger)
+
+    # /orders, /help, /strategy 커맨드 핸들러
     app.add_handler(CommandHandler("orders", make_orders_handler(trader, messenger)))
     app.add_handler(CommandHandler("help", make_help_handler(messenger)))
+    app.add_handler(CommandHandler("strategy", make_strategy_cmd(strategy_runner, messenger)))
 
     # text_router 생성 (각 명령어 핸들러 라우팅)
     text_router = make_text_router(
@@ -123,6 +148,8 @@ async def main():
         freq_handler=freq_handler,
         sl_tp_handler=sl_tp_handler,
         watchlist_handler=wl_handler,
+        signal_handler=signal_hdl,
+        strategy_handler=strategy_hdl,
     )
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), text_router))
 
@@ -139,6 +166,7 @@ async def main():
     finally:
         await uds.stop()
         await sl_tp_monitor.stop()
+        await strategy_runner.stop()
         await ohlcv_job.stop()
         await pnl_job.stop()
         await price_job.stop()

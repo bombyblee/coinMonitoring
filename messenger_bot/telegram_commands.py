@@ -17,10 +17,11 @@ _HELP_TEXT = """\
 🤖 CoinMonitor 사용 가이드
 
 📌 슬래시 커맨드
-  /start   자동 리포트 재개
-  /stop    자동 리포트 중지
-  /orders  현재 오픈 주문 조회
-  /help    이 도움말 표시
+  /start      자동 리포트 재개
+  /stop       자동 리포트 중지
+  /orders     현재 오픈 주문 조회
+  /strategy   전략 현황 조회
+  /help       이 도움말 표시
 
 ──────────────────────────
 📊 매수/매도 주문 (허용 유저만)
@@ -56,6 +57,14 @@ _HELP_TEXT = """\
     예) watchlist add SOLUSDT
   watchlist del <심볼>   심볼 제거
     예) watchlist del SOLUSDT
+
+──────────────────────────
+🤖 전략 관리
+  strategy                  실행 중 / 전체 전략 현황
+  strategy add <이름>        전략 활성화
+    예) strategy add RsiReversal
+  strategy del <이름>        전략 비활성화
+    예) strategy del EmaCross
 
 ──────────────────────────
 ⚙️ 설정
