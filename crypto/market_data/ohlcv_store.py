@@ -89,6 +89,20 @@ def _compute(df: pd.DataFrame) -> pd.DataFrame:
     # Z-score (20)
     df["zscore_20"] = (c - bb_mid) / bb_std.replace(0, np.nan)
 
+    # ADX 14 + DI (Wilder smoothing, com=13)
+    high_diff  = h.diff()
+    low_diff   = lo.shift(1) - lo
+    plus_dm    = high_diff.where((high_diff > low_diff) & (high_diff > 0), 0.0)
+    minus_dm   = low_diff.where((low_diff > high_diff) & (low_diff > 0), 0.0)
+    s_plus_dm  = plus_dm.ewm(com=13, adjust=False).mean()
+    s_minus_dm = minus_dm.ewm(com=13, adjust=False).mean()
+    plus_di    = 100 * s_plus_dm  / df["atr_14"].replace(0, np.nan)
+    minus_di   = 100 * s_minus_dm / df["atr_14"].replace(0, np.nan)
+    dx         = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    df["adx_14"]   = dx.ewm(com=13, adjust=False).mean()
+    df["plus_di"]  = plus_di
+    df["minus_di"] = minus_di
+
     return df
 
 

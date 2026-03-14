@@ -29,7 +29,7 @@ from messenger_bot import (
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
 from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob
-from crypto.strategies import MomentumBurst, StrategyRunner, SignalExecutor, RsiReversal, EmaCross
+from crypto.strategies import MomentumBurst, StrategyRunner, SignalExecutor, RsiReversal, EmaCross, LevelAware
 from crypto.strategies.trade_logger import TradeLogger
 
 async def main():
@@ -117,7 +117,7 @@ async def main():
     watchlist = Watchlist(
         os.getenv("WATCHLIST_SYMBOLS", "BTCUSDT,ETHUSDT").split(",")
     )
-    ohlcv_store = OhlcvStore(max_len=500)
+    ohlcv_store = OhlcvStore(max_len=1500)
     ohlcv_job = OhlcvJob(watchlist=watchlist, store=ohlcv_store)
     await ohlcv_job.start()
     wl_handler = make_watchlist_handler(watchlist, ohlcv_job)
@@ -134,7 +134,7 @@ async def main():
 
     strategy_runner = StrategyRunner(
         store=ohlcv_store,
-        strategies=[MomentumBurst(), RsiReversal(), EmaCross()],
+        strategies=[MomentumBurst(), RsiReversal(), EmaCross(), LevelAware()],
         messenger=messenger,
         chat_id=cfg.telegram_chat_id,
         executor=signal_executor,
