@@ -101,5 +101,14 @@ class BinanceFuturesTrader:
 
         return await asyncio.to_thread(_call)
 
+    async def get_user_trades(self, symbol: str, start_time: int = None, limit: int = 100) -> list:
+        """/fapi/v1/userTrades — 체결 내역. start_time은 밀리초 epoch."""
+        def _call():
+            params: dict = {"symbol": symbol, "limit": limit}
+            if start_time:
+                params["startTime"] = start_time
+            return self.client.sign_request("GET", "/fapi/v1/userTrades", params)
+        return await asyncio.to_thread(_call)
+
     async def exchange_info(self) -> dict:
         return await asyncio.to_thread(self.client.exchange_info)

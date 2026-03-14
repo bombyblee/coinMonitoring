@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import logging
 import uuid
 from dataclasses import dataclass
@@ -8,13 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-import pandas as pd
-
 from .base import Signal
 
 logger = logging.getLogger(__name__)
 
 TAKER_FEE_RATE = 0.0004   # Binance futures taker fee (0.04% per side)
+POLL_INTERVAL  = 60        # 청산 감지 폴링 주기 (초)
 
 
 # ── 레코드 ────────────────────────────────────────────────────────────────────
@@ -36,11 +36,12 @@ class TradeRecord:
     tp_mult:       float
     sl_mult:       float
     signal_reason: str
+    status:        str = "OPEN"    # OPEN / CLOSED
 
     # 청산 후 채워짐
     exit_time:    Optional[datetime] = None
     exit_price:   Optional[float]   = None
-    close_reason: Optional[str]     = None   # TP / SL
+    close_reason: Optional[str]     = None   # TP / SL / UNKNOWN
     gross_pnl:    Optional[float]   = None
     fee:          Optional[float]   = None
     net_pnl:      Optional[float]   = None
@@ -54,26 +55,28 @@ class TradeLogger:
 
     흐름
     ────
-    execution.on_confirm()  →  on_entry()         # 진입 직후
-    fill_notifier           →  notify_close_if_match()  # TP/SL 체결 시
-    매시간 + 종료 시         →  save_csv()
+    execution.on_confirm()  →  on_entry()         # 진입 직후 → CSV 즉시 저장
+    백그라운드 폴링          →  _check_close()    # Binance userTrades API로 청산 감지
+    청산 감지 시             →  Telegram 알림 + CSV 즉시 저장
     """
 
     def __init__(
         self,
+        trader,                          # BinanceFuturesTrader (userTrades 조회용)
         messenger,
         chat_id: str,
         results_dir: str = "./tradingResults",
     ):
+        self.trader      = trader
         self.messenger   = messenger
         self.chat_id     = chat_id
         self.results_dir = Path(results_dir)
         self.results_dir.mkdir(parents=True, exist_ok=True)
 
-        self._open:   dict[str, TradeRecord] = {}   # symbol → 진행 중 거래
-        self._closed: list[TradeRecord]      = []
-        self._task:   Optional[asyncio.Task] = None
-        self._stop    = asyncio.Event()
+        self._records: list[TradeRecord] = []          # 전체 레코드 (open + closed)
+        self._open:    dict[str, TradeRecord] = {}     # symbol → 진행 중 거래
+        self._task:    Optional[asyncio.Task] = None
+        self._stop     = asyncio.Event()
 
     # ── 진입 기록 ─────────────────────────────────────────────────────────────
 
@@ -103,58 +106,91 @@ class TradeLogger:
             tp_mult       = signal.tp_mult,
             sl_mult       = signal.sl_mult,
             signal_reason = signal.reason,
+            status        = "OPEN",
         )
         self._open[signal.symbol] = record
+        self._records.append(record)
         logger.info(
             "TradeLogger: entry [%s] %s %s @ %.4f qty=%.6f",
             record.record_id, signal.symbol, signal.direction, avg_price, quantity,
         )
+        self.save_csv()   # 진입 즉시 저장
 
-    # ── TP/SL 체결 이벤트 처리 ────────────────────────────────────────────────
+    # ── 청산 감지 (폴링) ──────────────────────────────────────────────────────
 
-    async def notify_close_if_match(self, msg: dict) -> None:
+    async def _poll_loop(self) -> None:
+        while not self._stop.is_set():
+            for symbol in list(self._open.keys()):
+                record = self._open.get(symbol)
+                if record:
+                    await self._check_close(symbol, record)
+            try:
+                await asyncio.wait_for(self._stop.wait(), timeout=POLL_INTERVAL)
+            except asyncio.TimeoutError:
+                pass
+
+    async def _check_close(self, symbol: str, record: TradeRecord) -> None:
         """
-        fill_notifier 에서 ORDER_TRADE_UPDATE 이벤트마다 호출.
-        open trade 와 매칭되는 TP/SL 체결이면 종료 처리 후 Telegram 알림.
+        Binance userTrades API로 진입 이후 청산 체결(realizedPnl != 0)을 감지.
+        찾으면 레코드를 닫고 Telegram 알림 + CSV 저장.
         """
-        o = msg.get("o", {})
-        if o.get("X") != "FILLED":
+        start_ms = int(record.entry_time.timestamp() * 1000) + 500  # 진입 시각 +0.5s
+        try:
+            trades = await self.trader.get_user_trades(symbol=symbol, start_time=start_ms)
+        except Exception as e:
+            logger.warning("TradeLogger: userTrades poll failed [%s]: %s", symbol, e)
             return
 
-        order_type = o.get("o", "")
-        if order_type not in ("STOP_MARKET", "TAKE_PROFIT_MARKET"):
+        if not trades or not isinstance(trades, list):
             return
 
-        symbol = o.get("s", "")
-        record = self._open.pop(symbol, None)
-        if record is None:
+        # 청산 방향 체결 중 realizedPnl != 0인 것 = 포지션 일부/전체 청산
+        close_side = "SELL" if record.direction == "LONG" else "BUY"
+        closing = [
+            t for t in trades
+            if t.get("side") == close_side and abs(float(t.get("realizedPnl", 0))) > 1e-9
+        ]
+        if not closing:
             return
 
-        exit_price  = float(o.get("ap") or o.get("L") or 0)
-        exit_ts     = int(o.get("T", 0))
+        # 가장 최근 청산 체결 기준 (여러 번 분할 청산 시 마지막 기준)
+        trade = max(closing, key=lambda t: int(t.get("time", 0)))
+
+        exit_price  = float(trade.get("price", 0))
+        gross_pnl   = float(trade.get("realizedPnl", 0))
+        exit_fee    = abs(float(trade.get("commission", 0)))
+        entry_fee   = record.entry_price * record.quantity * TAKER_FEE_RATE
+        fee         = round(entry_fee + exit_fee, 6)
+        net_pnl     = round(gross_pnl - entry_fee, 4)   # exit_fee는 gross_pnl에 이미 반영됨
+
+        exit_ts     = int(trade.get("time", 0))
         exit_time   = (
             datetime.fromtimestamp(exit_ts / 1000, tz=timezone.utc)
             if exit_ts else datetime.now(timezone.utc)
         )
-        gross_pnl   = float(o.get("rp", 0))
-        exit_fee    = abs(float(o.get("n", 0)))
-        entry_fee   = record.entry_price * record.quantity * TAKER_FEE_RATE
-        fee         = round(entry_fee + exit_fee, 6)
-        net_pnl     = round(gross_pnl - fee, 4)
-        close_reason = "TP" if order_type == "TAKE_PROFIT_MARKET" else "SL"
 
+        # TP vs SL 추정 (진입가 대비 청산가 방향)
+        if record.direction == "LONG":
+            close_reason = "TP" if exit_price >= record.entry_price else "SL"
+        else:
+            close_reason = "TP" if exit_price <= record.entry_price else "SL"
+
+        # 레코드 업데이트
         record.exit_time    = exit_time
         record.exit_price   = exit_price
         record.close_reason = close_reason
         record.gross_pnl    = round(gross_pnl, 4)
         record.fee          = fee
         record.net_pnl      = net_pnl
+        record.status       = "CLOSED"
 
-        self._closed.append(record)
+        del self._open[symbol]
         logger.info(
             "TradeLogger: closed [%s] %s %s via %s  net=%.4f USDT",
             record.record_id, symbol, record.direction, close_reason, net_pnl,
         )
+
+        self.save_csv()                      # 청산 즉시 저장
         await self._notify_close(record)
 
     # ── Telegram 알림 ─────────────────────────────────────────────────────────
@@ -186,19 +222,24 @@ class TradeLogger:
     # ── CSV 저장 ──────────────────────────────────────────────────────────────
 
     def save_csv(self) -> None:
-        if not self._closed:
+        """전체 레코드(open + closed)를 단일 CSV에 즉시 덮어씀."""
+        if not self._records:
             return
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         path  = self.results_dir / f"trades_{today}.csv"
-        df    = pd.DataFrame([_to_row(r) for r in self._closed])
-        df.to_csv(path, index=False)
-        logger.info("TradeLogger: %d records → %s", len(self._closed), path)
+        rows  = [_to_row(r) for r in self._records]
+        fields = list(rows[0].keys())
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+        logger.info("TradeLogger: saved %d records → %s", len(self._records), path)
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
         self._stop.clear()
-        self._task = asyncio.create_task(self._hourly_loop(), name="trade_logger")
+        self._task = asyncio.create_task(self._poll_loop(), name="trade_logger")
 
     async def stop(self) -> None:
         self._stop.set()
@@ -207,19 +248,13 @@ class TradeLogger:
             self._task.cancel()
             await asyncio.sleep(0)
 
-    async def _hourly_loop(self) -> None:
-        while not self._stop.is_set():
-            try:
-                await asyncio.wait_for(self._stop.wait(), timeout=3600)
-            except asyncio.TimeoutError:
-                self.save_csv()
-
 
 # ── 헬퍼 ──────────────────────────────────────────────────────────────────────
 
 def _to_row(r: TradeRecord) -> dict:
     return {
         "record_id":    r.record_id,
+        "status":       r.status,
         "symbol":       r.symbol,
         "direction":    r.direction,
         "strategy":     r.strategy,

@@ -17,6 +17,8 @@ class MomentumBurst(BaseStrategy):
 
     name = "MomentumBurst"
     timeframe = "5min"
+    tp_mult = 3.5
+    sl_mult = 3.0
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         if len(df) < 20:
@@ -42,6 +44,8 @@ class MomentumBurst(BaseStrategy):
                     f"rsi={row['rsi_14']:.1f}  zscore={row['zscore_20']:.2f}"
                 ),
                 atr=float(row["atr_14"]),
+                tp_mult=self.tp_mult,
+                sl_mult=self.sl_mult,
             )
 
         # ── Short 조건 ─────────────────────────────────────────────────────────
@@ -61,6 +65,8 @@ class MomentumBurst(BaseStrategy):
                     f"rsi={row['rsi_14']:.1f}  zscore={row['zscore_20']:.2f}"
                 ),
                 atr=float(row["atr_14"]),
+                tp_mult=self.tp_mult,
+                sl_mult=self.sl_mult,
             )
 
         return None

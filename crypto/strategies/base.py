@@ -20,6 +20,15 @@ class Signal:
 class BaseStrategy:
     name: str = "base"
     timeframe: str = "1min"   # runner가 리샘플링에 사용 ("1min" = 원본 그대로)
+    tp_mult: float = 3.5      # 클래스 기본값 (서브클래스에서 오버라이드)
+    sl_mult: float = 3.0
+
+    def __init__(self, tp_mult: float = None, sl_mult: float = None):
+        # 인자가 주어지면 인스턴스 속성으로 덮어씀, 아니면 클래스 기본값 사용
+        if tp_mult is not None:
+            self.tp_mult = tp_mult
+        if sl_mult is not None:
+            self.sl_mult = sl_mult
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         """

@@ -16,6 +16,8 @@ class RsiReversal(BaseStrategy):
     """
 
     name = "RsiReversal"
+    tp_mult = 2.5
+    sl_mult = 2.5
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         if len(df) < 21:
@@ -40,8 +42,8 @@ class RsiReversal(BaseStrategy):
                     f"close={row['close']:.4f}  bb_lower={row['bb_lower']:.4f}"
                 ),
                 atr=float(row["atr_14"]),
-                tp_mult=2.5,
-                sl_mult=1.5,
+                tp_mult=self.tp_mult,
+                sl_mult=self.sl_mult,
             )
 
         # ── Short 조건 ─────────────────────────────────────────────────────────
@@ -60,8 +62,8 @@ class RsiReversal(BaseStrategy):
                     f"close={row['close']:.4f}  bb_upper={row['bb_upper']:.4f}"
                 ),
                 atr=float(row["atr_14"]),
-                tp_mult=2.5,
-                sl_mult=1.5,
+                tp_mult=self.tp_mult,
+                sl_mult=self.sl_mult,
             )
 
         return None

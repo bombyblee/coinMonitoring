@@ -60,8 +60,8 @@ async def main():
         allowed_symbols=set((os.getenv("ALLOWED_SYMBOLS")).split(",")),
     )
 
-    # trade logger (messenger, chat_id 준비 직후 생성 — on_user_stream 클로저에서 참조)
-    trade_logger = TradeLogger(messenger=messenger, chat_id=cfg.telegram_chat_id)
+    # trade logger (trader는 userTrades 폴링용)
+    trade_logger = TradeLogger(trader=trader, messenger=messenger, chat_id=cfg.telegram_chat_id)
     await trade_logger.start()
 
     # (A) 체결 알림: user stream
@@ -72,7 +72,7 @@ async def main():
     )
 
     async def on_user_stream(msg: dict):
-        await handle_user_stream_message(msg, messenger, cfg.telegram_chat_id, trade_logger=trade_logger)
+        await handle_user_stream_message(msg, messenger, cfg.telegram_chat_id)
 
     await uds.start(on_user_stream)
 

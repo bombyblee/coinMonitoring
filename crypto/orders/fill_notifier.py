@@ -4,7 +4,6 @@ async def handle_user_stream_message(
     msg: dict,
     messenger,
     chat_id: str,
-    trade_logger=None,   # TradeLogger (optional)
 ):
     # 주문/체결 이벤트는 보통 ORDER_TRADE_UPDATE로 옴
     if msg.get("e") != "ORDER_TRADE_UPDATE":
@@ -21,7 +20,7 @@ async def handle_user_stream_message(
     last_fill_px = o.get("L")
     last_fill_qty = o.get("l")
 
-    # “최종 상태” 또는 “부분체결”도 알림(원하면 조건 바꾸면 됨)
+    # "최종 상태" 또는 "부분체결"도 알림
     if status in _FINAL or status == "PARTIALLY_FILLED":
         text = (
             f"📣 체결/주문 업데이트\n"
@@ -31,7 +30,3 @@ async def handle_user_stream_message(
             f"last={last_fill_qty}@{last_fill_px}"
         )
         await messenger.post_message(chat_id, text)
-
-    # trade_logger: TP/SL FILLED 이벤트를 전달해 진입~청산 기록 완성
-    if trade_logger and status == "FILLED":
-        await trade_logger.notify_close_if_match(msg)

@@ -23,6 +23,7 @@ dist/
 # Maven
 target/
 dist/
+tradingResults/
 
 # JetBrains IDE
 .idea/
@@ -42,6 +43,7 @@ Thumbs.db
 *.war
 .env
 .venv
+.csv
 
 # Large media files
 *.mp4

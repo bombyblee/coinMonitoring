@@ -17,6 +17,8 @@ class EmaCross(BaseStrategy):
 
     name = "EmaCross"
     timeframe = "5min"
+    tp_mult = 4.0
+    sl_mult = 4.0
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         if len(df) < 21:
@@ -44,8 +46,8 @@ class EmaCross(BaseStrategy):
                     f"close={row['close']:.4f}"
                 ),
                 atr=float(row["atr_14"]),
-                tp_mult=4.0,
-                sl_mult=2.5,
+                tp_mult=self.tp_mult,
+                sl_mult=self.sl_mult,
             )
 
         # ── Short 조건 (데드크로스) ────────────────────────────────────────────
@@ -67,8 +69,8 @@ class EmaCross(BaseStrategy):
                     f"close={row['close']:.4f}"
                 ),
                 atr=float(row["atr_14"]),
-                tp_mult=4.0,
-                sl_mult=2.5,
+                tp_mult=self.tp_mult,
+                sl_mult=self.sl_mult,
             )
 
         return None
