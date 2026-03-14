@@ -13,7 +13,7 @@ from crypto.binance.user_stream import UserDataStream
 from crypto.orders.service import OrderService, RiskConfig
 from crypto.orders.fill_notifier import handle_user_stream_message
 
-from crypto.jobs import ReportState, FuturesReporterJob, PnlReporterJob
+from crypto.jobs import ReportState, FuturesReporterJob, PnlReporterJob, DrawdownGuard
 
 from messenger_bot import (
     TelegramBot,
@@ -94,6 +94,15 @@ async def main():
         market_api=market_api,  # ✅ 추가
     )
     await pnl_job.start(cfg.telegram_chat_id)
+
+    # (B-1) 드로우다운 가드
+    drawdown_guard = DrawdownGuard(
+        trader=trader,
+        messenger=messenger,
+        chat_id=cfg.telegram_chat_id,
+        threshold_usdt=float(os.getenv("DRAWDOWN_THRESHOLD_USDT", "200")),
+    )
+    await drawdown_guard.start()
 
     # trade handler 생성
     order_service = OrderService(trader, risk)
@@ -176,6 +185,7 @@ async def main():
         await strategy_runner.stop()
         await ohlcv_job.stop()
         await pnl_job.stop()
+        await drawdown_guard.stop()
         await price_job.stop()
         await app.updater.stop()
         await app.stop()
