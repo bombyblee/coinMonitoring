@@ -43,6 +43,7 @@ class EmaCross(BaseStrategy):
                     f"rsi={row['rsi_14']:.1f}  vol_ratio={row['vol_ratio']:.2f}\n"
                     f"close={row['close']:.4f}"
                 ),
+                atr=float(row["atr_14"]),
                 tp_mult=4.0,
                 sl_mult=2.5,
             )
@@ -65,6 +66,7 @@ class EmaCross(BaseStrategy):
                     f"rsi={row['rsi_14']:.1f}  vol_ratio={row['vol_ratio']:.2f}\n"
                     f"close={row['close']:.4f}"
                 ),
+                atr=float(row["atr_14"]),
                 tp_mult=4.0,
                 sl_mult=2.5,
             )

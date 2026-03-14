@@ -74,13 +74,16 @@ class SignalExecutor:
         if df is None or len(df) < 1:
             return
         row = df.iloc[-1]
+        # signal.atr: detect() 시점의 해당 timeframe ATR (5분봉 전략은 5분봉 ATR)
+        # 0이면 fallback으로 1분봉 store ATR 사용
+        atr = signal.atr if signal.atr > 0 else float(row["atr_14"])
         self._pending[signal.symbol] = PendingSignal(
             signal=signal,
-            atr=float(row["atr_14"]),
+            atr=atr,
             close=float(row["close"]),
             expires_at=time.time() + CONFIRM_WINDOW,
         )
-        logger.debug("Pending signal added: %s %s", signal.symbol, signal.direction)
+        logger.debug("Pending signal added: %s %s (ATR=%.4f)", signal.symbol, signal.direction, atr)
 
     # ── 사용자 확인 처리 ──────────────────────────────────────────────────────
 

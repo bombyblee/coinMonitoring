@@ -39,7 +39,8 @@ class RsiReversal(BaseStrategy):
                     f"zscore={prev['zscore_20']:.2f}  vol_ratio={row['vol_ratio']:.2f}\n"
                     f"close={row['close']:.4f}  bb_lower={row['bb_lower']:.4f}"
                 ),
-                tp_mult=1.5,
+                atr=float(row["atr_14"]),
+                tp_mult=2.5,
                 sl_mult=1.5,
             )
 
@@ -58,7 +59,8 @@ class RsiReversal(BaseStrategy):
                     f"zscore={prev['zscore_20']:.2f}  vol_ratio={row['vol_ratio']:.2f}\n"
                     f"close={row['close']:.4f}  bb_upper={row['bb_upper']:.4f}"
                 ),
-                tp_mult=1.5,
+                atr=float(row["atr_14"]),
+                tp_mult=2.5,
                 sl_mult=1.5,
             )
 

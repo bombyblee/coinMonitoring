@@ -41,6 +41,7 @@ class MomentumBurst(BaseStrategy):
                     f"ema5={row['ema_5']:.2f}  ema20={row['ema_20']:.2f}  close={row['close']:.2f}\n"
                     f"rsi={row['rsi_14']:.1f}  zscore={row['zscore_20']:.2f}"
                 ),
+                atr=float(row["atr_14"]),
             )
 
         # ── Short 조건 ─────────────────────────────────────────────────────────
@@ -59,6 +60,7 @@ class MomentumBurst(BaseStrategy):
                     f"ema5={row['ema_5']:.2f}  ema20={row['ema_20']:.2f}  close={row['close']:.2f}\n"
                     f"rsi={row['rsi_14']:.1f}  zscore={row['zscore_20']:.2f}"
                 ),
+                atr=float(row["atr_14"]),
             )
 
         return None
