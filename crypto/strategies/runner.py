@@ -53,10 +53,22 @@ class StrategyRunner:
         self.cooldown_sec = cooldown_sec
         self.executor = executor
         self._last_signal: dict[tuple[str, str], float] = {}
+        self._auto: dict[str, float] = {}   # strategy name → auto USDT amount
         self._task: Optional[asyncio.Task] = None
         self._stop = asyncio.Event()
 
     # ── public ───────────────────────────────────────────────────────────────
+
+    def set_auto(self, strategy_name: str, usdt: float) -> bool:
+        """전략 자동 진입 활성화. 전략이 없으면 False 반환."""
+        if not any(s.name == strategy_name for s in self.strategies):
+            return False
+        self._auto[strategy_name] = usdt
+        return True
+
+    def unset_auto(self, strategy_name: str) -> bool:
+        """전략 자동 진입 비활성화. 등록돼 있지 않으면 False 반환."""
+        return self._auto.pop(strategy_name, None) is not None
 
     def add_strategy(self, strategy: BaseStrategy) -> bool:
         """이름이 중복되지 않으면 추가. 성공 여부 반환."""
@@ -125,17 +137,32 @@ class StrategyRunner:
         self._last_signal[key] = now
 
         emoji = "🟢" if signal.direction == "LONG" else "🔴"
-        msg = (
-            f"{emoji} [{signal.strategy}] {signal.symbol} {signal.direction} 시그널\n"
-            f"{signal.reason}\n"
-            f"─\n"
-            f"'positive' → TP(x{signal.tp_mult}) + SL(x{signal.sl_mult}) 자동 주문\n"
-            f"'swing' → SL(x{signal.sl_mult})만 + 추세 반전 알림\n"
-            f"(2분 이내 답장)"
-        )
-        try:
-            await self.messenger.post_message(self.chat_id, msg)
+        auto_usdt = self._auto.get(signal.strategy)
+
+        if auto_usdt is not None and self.executor:
+            # ── 자동 진입 모드 ────────────────────────────────────────────────
+            self.executor.add_pending(signal)
+            result = await self.executor.on_confirm("full", usdt_override=auto_usdt)
+            msg = (
+                f"🤖 [{signal.strategy}] {signal.symbol} {signal.direction} 자동 진입\n"
+                f"{signal.reason}\n"
+                f"─\n"
+                f"{result}"
+            )
+        else:
+            # ── 수동 확인 모드 ────────────────────────────────────────────────
+            msg = (
+                f"{emoji} [{signal.strategy}] {signal.symbol} {signal.direction} 시그널\n"
+                f"{signal.reason}\n"
+                f"─\n"
+                f"'positive' → TP(x{signal.tp_mult}) + SL(x{signal.sl_mult}) 자동 주문\n"
+                f"'swing' → SL(x{signal.sl_mult})만 + 추세 반전 알림\n"
+                f"(2분 이내 답장)"
+            )
             if self.executor:
                 self.executor.add_pending(signal)
+
+        try:
+            await self.messenger.post_message(self.chat_id, msg)
         except Exception as e:
             logger.warning("Signal notification failed: %s", e)

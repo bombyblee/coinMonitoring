@@ -56,6 +56,7 @@ class SignalExecutor:
         messenger,
         chat_id: str,
         auto_usdt: float = 50.0,
+        trade_logger=None,    # TradeLogger (optional)
     ):
         self.order_service = order_service
         self.trader = trader
@@ -63,6 +64,7 @@ class SignalExecutor:
         self.messenger = messenger
         self.chat_id = chat_id
         self.auto_usdt = auto_usdt
+        self.trade_logger = trade_logger
 
         self._pending: dict[str, PendingSignal] = {}   # symbol → PendingSignal
         self._swings: list[SwingMonitor] = []
@@ -126,6 +128,19 @@ class SignalExecutor:
         else:
             tp_price = _round_price(avg_price - tp_mult * atr)
             sl_price = _round_price(avg_price + sl_mult * atr)
+
+        # ── 진입 기록 ────────────────────────────────────────────────────────
+        if self.trade_logger:
+            qty = float(order_resp.get("executedQty") or 0)
+            self.trade_logger.on_entry(
+                signal    = signal,
+                avg_price = avg_price,
+                quantity  = qty,
+                usdt_size = usdt,
+                tp_price  = tp_price if mode == "full" else None,
+                sl_price  = sl_price,
+                mode      = mode,
+            )
 
         # ── SL 주문 (공통) ───────────────────────────────────────────────────
         sl_id = "?"

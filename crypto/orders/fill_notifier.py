@@ -1,6 +1,11 @@
 _FINAL = {"FILLED", "CANCELED", "REJECTED", "EXPIRED"}
 
-async def handle_user_stream_message(msg: dict, messenger, chat_id: str):
+async def handle_user_stream_message(
+    msg: dict,
+    messenger,
+    chat_id: str,
+    trade_logger=None,   # TradeLogger (optional)
+):
     # 주문/체결 이벤트는 보통 ORDER_TRADE_UPDATE로 옴
     if msg.get("e") != "ORDER_TRADE_UPDATE":
         return
@@ -26,3 +31,7 @@ async def handle_user_stream_message(msg: dict, messenger, chat_id: str):
             f"last={last_fill_qty}@{last_fill_px}"
         )
         await messenger.post_message(chat_id, text)
+
+    # trade_logger: TP/SL FILLED 이벤트를 전달해 진입~청산 기록 완성
+    if trade_logger and status == "FILLED":
+        await trade_logger.notify_close_if_match(msg)

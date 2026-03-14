@@ -29,7 +29,8 @@ from messenger_bot import (
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
 from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob
-from crypto.strategies import MomentumBurst, StrategyRunner, SignalExecutor,  RsiReversal, EmaCross
+from crypto.strategies import MomentumBurst, StrategyRunner, SignalExecutor, RsiReversal, EmaCross
+from crypto.strategies.trade_logger import TradeLogger
 
 async def main():
     cfg = load_config()
@@ -43,7 +44,7 @@ async def main():
     # command listener (receive용)
     app = Application.builder().token(cfg.telegram_token).build()
     start_cmd, stop_cmd = make_handlers(state, messenger)
-    
+
     app.add_handler(CommandHandler("start", start_cmd))
     app.add_handler(CommandHandler("stop", stop_cmd))
 
@@ -55,9 +56,13 @@ async def main():
     )
 
     risk = RiskConfig(
-        max_usdt_per_order=float(os.getenv("MAX_USDT_PER_ORDER", "200")),
-        allowed_symbols=set((os.getenv("ALLOWED_SYMBOLS", "BTCUSDT,ETHUSDT")).split(",")),
+        max_usdt_per_order=float(os.getenv("MAX_USDT_PER_ORDER")),
+        allowed_symbols=set((os.getenv("ALLOWED_SYMBOLS")).split(",")),
     )
+
+    # trade logger (messenger, chat_id 준비 직후 생성 — on_user_stream 클로저에서 참조)
+    trade_logger = TradeLogger(messenger=messenger, chat_id=cfg.telegram_chat_id)
+    await trade_logger.start()
 
     # (A) 체결 알림: user stream
     uds = UserDataStream(
@@ -67,7 +72,7 @@ async def main():
     )
 
     async def on_user_stream(msg: dict):
-        await handle_user_stream_message(msg, messenger, cfg.telegram_chat_id)
+        await handle_user_stream_message(msg, messenger, cfg.telegram_chat_id, trade_logger=trade_logger)
 
     await uds.start(on_user_stream)
 
@@ -124,6 +129,7 @@ async def main():
         messenger=messenger,
         chat_id=cfg.telegram_chat_id,
         auto_usdt=float(os.getenv("AUTO_TRADE_USDT", "50")),
+        trade_logger=trade_logger,
     )
 
     strategy_runner = StrategyRunner(
@@ -164,6 +170,7 @@ async def main():
     except (KeyboardInterrupt, SystemExit):
         pass
     finally:
+        await trade_logger.stop()
         await uds.stop()
         await sl_tp_monitor.stop()
         await strategy_runner.stop()
