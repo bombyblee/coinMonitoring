@@ -3,7 +3,7 @@ from __future__ import annotations
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from crypto.strategies import MomentumBurst, RsiReversal, EmaCross
+from crypto.strategies import MomentumBurst, RsiReversal, EmaCross, LevelAware
 
 # ── 전략 레지스트리 ────────────────────────────────────────────────────────────
 # TP/SL 배율은 각 전략 클래스의 tp_mult / sl_mult 클래스 속성으로 관리.
@@ -13,6 +13,7 @@ _REGISTRY: dict[str, tuple] = {
     "MomentumBurst": (MomentumBurst, "단기 모멘텀 버스트 — 3봉 상승/하락 + 거래량 급증(×1.8) + EMA 추세 | 5min"),
     "RsiReversal":   (RsiReversal,   "RSI 반전 — 과매도/과매수 탈출 + zscore 극단(±1.5) + 거래량 | 1min"),
     "EmaCross":      (EmaCross,      "EMA 골든/데드크로스 — ema5×ema20 돌파 + RSI 범위 + 거래량(×1.3) | 5min"),
+    "LevelAware":    (LevelAware,    "레짐+레벨 — 15min 지지/저항 탐지 + ADX 레짐(모멘텀/리버전) 기반 진입 | 1min"),
 }
 
 _REGISTRY_LOWER: dict[str, str] = {k.lower(): k for k in _REGISTRY}
@@ -57,6 +58,7 @@ def _status_text(runner) -> str:
         "strategy add/del <이름>\n"
         "strategy <이름> tp/sl <배율>   → TP/SL 배율 변경\n"
         "strategy <이름> auto [USDT]  /  strategy <이름> auto off\n"
+        "strategy auto on [USDT]  → 전체 자동 진입 활성화\n"
         "strategy auto off  → 전체 자동 진입 해제"
     )
     return "\n".join(parts)
@@ -72,6 +74,7 @@ def make_strategy_handler(runner, messenger):
       'strategy <이름> sl <배율>'     → SL 배율 변경
       'strategy <이름> auto [USDT]'   → 자동 진입 활성화
       'strategy <이름> auto off'      → 자동 진입 비활성화
+      'strategy auto on [USDT]'       → 전체 자동 진입 활성화
       'strategy auto off'             → 전체 자동 진입 해제
     """
 
@@ -117,6 +120,21 @@ def make_strategy_handler(runner, messenger):
                 )
             else:
                 await messenger.post_message(chat_id, "⚠️ 자동 진입이 설정된 전략 없음")
+
+        # ── strategy auto on [USDT]  → 전체 자동 진입 활성화 ─────────────────
+        elif sub == "auto" and raw_name.lower() == "on":
+            try:
+                usdt = float(parts[3]) if len(parts) > 3 else runner.executor.auto_usdt
+            except (ValueError, AttributeError):
+                usdt = 50.0
+            activated = [s.name for s in runner.strategies]
+            for s in runner.strategies:
+                runner.set_auto(s.name, usdt)
+            await messenger.post_message(
+                chat_id,
+                f"🤖 전체 자동 진입 활성화 ({usdt:.0f} USDT)\n"
+                f"대상: {', '.join(activated)}"
+            )
 
         # ── strategy <이름> tp/sl <배율> ─────────────────────────────────────
         elif len(parts) >= 4 and raw_name.lower() in ("tp", "sl"):
