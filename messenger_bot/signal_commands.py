@@ -20,10 +20,17 @@ def make_signal_handler(executor, messenger):
         # positive [amount]
         if parts[:1] == ["positive"]:
             mode = "full"
+            reverse = False
             amount_parts = parts[1:]
         # swing [amount]
         elif parts[:1] == ["swing"]:
             mode = "swing"
+            reverse = False
+            amount_parts = parts[1:]
+        # reverse [amount]
+        elif parts[:1] == ["reverse"]:
+            mode = "full"
+            reverse = True
             amount_parts = parts[1:]
         else:
             return
@@ -36,7 +43,7 @@ def make_signal_handler(executor, messenger):
                 await messenger.post_message(chat_id, f"❌ 금액 파싱 실패: {amount_parts[0]}")
                 return
 
-        result = await executor.on_confirm(mode, usdt_override=usdt_override)
+        result = await executor.on_confirm(mode, usdt_override=usdt_override, reverse=reverse)
         await messenger.post_message(chat_id, result)
 
     return handler

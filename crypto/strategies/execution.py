@@ -89,10 +89,11 @@ class SignalExecutor:
 
     # ── 사용자 확인 처리 ──────────────────────────────────────────────────────
 
-    async def on_confirm(self, mode: str, usdt_override: float | None = None) -> str:
+    async def on_confirm(self, mode: str, usdt_override: float | None = None, reverse: bool = False) -> str:
         """
         mode: 'full'  → TP + SL
               'swing' → SL만 + 추세 반전 모니터링
+        reverse: True → 시그널 반대 방향 진입, TP↔SL 교체
         """
         now = time.time()
         valid = {sym: p for sym, p in self._pending.items() if p.expires_at > now}
@@ -106,8 +107,9 @@ class SignalExecutor:
         del self._pending[sym]
 
         signal = pending.signal
-        side = "BUY" if signal.direction == "LONG" else "SELL"
-        close_side = "SELL" if signal.direction == "LONG" else "BUY"
+        direction = ("SHORT" if signal.direction == "LONG" else "LONG") if reverse else signal.direction
+        side = "BUY" if direction == "LONG" else "SELL"
+        close_side = "SELL" if direction == "LONG" else "BUY"
 
         # ── 시장가 진입 ──────────────────────────────────────────────────────
         usdt = usdt_override if usdt_override is not None else self.auto_usdt
@@ -122,7 +124,7 @@ class SignalExecutor:
         tp_mult = signal.tp_mult
         sl_mult = signal.sl_mult
 
-        if signal.direction == "LONG":
+        if direction == "LONG":
             tp_price = _round_price(avg_price + tp_mult * atr)
             sl_price = _round_price(avg_price - sl_mult * atr)
         else:

@@ -84,8 +84,8 @@ def make_text_router(**kwargs) -> HandlerFn:
                 await deps.strategy_handler(update, context)
             return
 
-        # signal confirm: "positive [amount]" / "swing [amount]"
-        if lowered.startswith("positive") or lowered.startswith("swing"):
+        # signal confirm: "positive [amount]" / "swing [amount]" / "reverse [amount]"
+        if lowered.startswith("positive") or lowered.startswith("swing") or lowered.startswith("reverse"):
             if deps.signal_handler is not None:
                 await deps.signal_handler(update, context)
             return
