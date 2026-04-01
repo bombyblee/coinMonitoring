@@ -152,11 +152,12 @@ class SignalExecutor:
         except Exception as e:
             return (
                 f"⚠️ 진입 완료, SL 실패 — 수동 설정 필요\n"
-                f"{sym} {signal.direction}  entry≈{avg_price:.2f}  ATR={atr:.2f}\n"
+                f"{sym} {direction}  entry≈{avg_price:.2f}  ATR={atr:.2f}\n"
                 f"권장 SL: {sl_price}  오류: {e}"
             )
 
         # ── full: TP까지 ─────────────────────────────────────────────────────
+        reverse_tag = " [REVERSE]" if reverse else ""
         if mode == "full":
             tp_id = "?"
             try:
@@ -165,11 +166,11 @@ class SignalExecutor:
             except Exception as e:
                 return (
                     f"⚠️ 진입+SL 완료, TP 실패 — 수동 설정 필요\n"
-                    f"{sym} {signal.direction}  entry≈{avg_price:.2f}\n"
+                    f"{sym} {direction}  entry≈{avg_price:.2f}\n"
                     f"SL={sl_price}(id={sl_id})  권장 TP: {tp_price}  오류: {e}"
                 )
             return (
-                f"✅ {signal.direction} 진입 [{signal.strategy}]\n"
+                f"✅ {direction} 진입{reverse_tag} [{signal.strategy}]\n"
                 f"{sym}  entry≈{avg_price:.2f}  ATR={atr:.2f}\n"
                 f"TP={tp_price} (id={tp_id})\n"
                 f"SL={sl_price} (id={sl_id})\n"
@@ -179,12 +180,12 @@ class SignalExecutor:
         # ── swing: SL만, 추세 반전 모니터링 등록 ────────────────────────────
         self._swings.append(SwingMonitor(
             symbol=sym,
-            direction=signal.direction,
+            direction=direction,
             entry=avg_price,
             sl_algo_id=sl_id,
         ))
         return (
-            f"✅ {signal.direction} 스윙 진입 [{signal.strategy}]\n"
+            f"✅ {direction} 스윙 진입{reverse_tag} [{signal.strategy}]\n"
             f"{sym}  entry≈{avg_price:.2f}  ATR={atr:.2f}\n"
             f"SL={sl_price} (id={sl_id})\n"
             f"추세 반전 시 알림 (EMA 이탈 기준)"
