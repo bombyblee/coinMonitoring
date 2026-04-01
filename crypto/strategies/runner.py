@@ -151,16 +151,27 @@ class StrategyRunner:
             )
         else:
             # ── 수동 확인 모드 ────────────────────────────────────────────────
+            if self.executor:
+                signal_id = self.executor.add_pending(signal, timeframe=timeframe)
+                pending_count = len(self.executor._pending)
+                id_tag = f" [{signal_id}]" if pending_count > 1 else ""
+                confirm_hint = (
+                    f"'positive{id_tag}' → TP(x{signal.tp_mult}) + SL(x{signal.sl_mult}) 자동 주문\n"
+                    f"'swing{id_tag}' → SL(x{signal.sl_mult})만 + 추세 반전 알림"
+                )
+            else:
+                id_tag = ""
+                confirm_hint = (
+                    f"'positive' → TP(x{signal.tp_mult}) + SL(x{signal.sl_mult}) 자동 주문\n"
+                    f"'swing' → SL(x{signal.sl_mult})만 + 추세 반전 알림"
+                )
             msg = (
                 f"{emoji} [{signal.strategy}] {signal.symbol} {signal.direction} 시그널\n"
                 f"{signal.reason}\n"
                 f"─\n"
-                f"'positive' → TP(x{signal.tp_mult}) + SL(x{signal.sl_mult}) 자동 주문\n"
-                f"'swing' → SL(x{signal.sl_mult})만 + 추세 반전 알림\n"
+                f"{confirm_hint}\n"
                 f"(2분 이내 답장)"
             )
-            if self.executor:
-                self.executor.add_pending(signal, timeframe=timeframe)
 
         try:
             await self.messenger.post_message(self.chat_id, msg)

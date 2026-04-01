@@ -35,15 +35,21 @@ def make_signal_handler(executor, messenger):
         else:
             return
 
+        # amount_parts에서 signal_id(알파벳)와 usdt(숫자) 분리
+        # 예) ["A", "500"] / ["500"] / ["A"] / []
+        signal_id = None
         usdt_override = None
-        if amount_parts:
-            try:
-                usdt_override = float(amount_parts[0])
-            except ValueError:
-                await messenger.post_message(chat_id, f"❌ 금액 파싱 실패: {amount_parts[0]}")
-                return
+        for part in amount_parts:
+            if part.isalpha() and len(part) == 1:
+                signal_id = part.lower()
+            else:
+                try:
+                    usdt_override = float(part)
+                except ValueError:
+                    await messenger.post_message(chat_id, f"❌ 파싱 실패: {part}")
+                    return
 
-        result = await executor.on_confirm(mode, usdt_override=usdt_override, reverse=reverse)
+        result = await executor.on_confirm(mode, usdt_override=usdt_override, reverse=reverse, signal_id=signal_id)
         await messenger.post_message(chat_id, result)
 
     return handler

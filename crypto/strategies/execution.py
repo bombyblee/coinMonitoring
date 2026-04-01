@@ -95,6 +95,7 @@ class PendingSignal:
     close: float         # 시그널 시점 close (entry 추정용 fallback)
     expires_at: float
     timeframe: str = "1min"
+    signal_id: str = ""
 
 
 @dataclass
@@ -133,33 +134,38 @@ class SignalExecutor:
 
         self._pending: dict[str, PendingSignal] = {}   # symbol → PendingSignal
         self._swings: list[SwingMonitor] = []
+        self._id_counter: int = 0
 
     # ── 시그널 등록 (StrategyRunner가 호출) ──────────────────────────────────
 
-    def add_pending(self, signal: Signal, timeframe: str = "1min") -> None:
+    def add_pending(self, signal: Signal, timeframe: str = "1min") -> str:
+        """시그널을 대기열에 등록하고 signal_id를 반환."""
         df = self.store.get(signal.symbol)
         if df is None or len(df) < 1:
-            return
+            return ""
         row = df.iloc[-1]
-        # signal.atr: detect() 시점의 해당 timeframe ATR (5분봉 전략은 5분봉 ATR)
-        # 0이면 fallback으로 1분봉 store ATR 사용
         atr = signal.atr if signal.atr > 0 else float(row["atr_14"])
+        self._id_counter = (self._id_counter % 26) + 1
+        signal_id = chr(ord("a") + self._id_counter - 1)  # a, b, c, ...
         self._pending[signal.symbol] = PendingSignal(
             signal=signal,
             atr=atr,
             close=float(row["close"]),
             expires_at=time.time() + CONFIRM_WINDOW,
             timeframe=timeframe,
+            signal_id=signal_id,
         )
-        logger.debug("Pending signal added: %s %s (ATR=%.4f)", signal.symbol, signal.direction, atr)
+        logger.debug("Pending signal added: [%s] %s %s (ATR=%.4f)", signal_id, signal.symbol, signal.direction, atr)
+        return signal_id
 
     # ── 사용자 확인 처리 ──────────────────────────────────────────────────────
 
-    async def on_confirm(self, mode: str, usdt_override: float | None = None, reverse: bool = False) -> str:
+    async def on_confirm(self, mode: str, usdt_override: float | None = None, reverse: bool = False, signal_id: str | None = None) -> str:
         """
         mode: 'full'  → TP + SL
               'swing' → SL만 + 추세 반전 모니터링
         reverse: True → 시그널 반대 방향 진입, TP↔SL 교체
+        signal_id: 특정 시그널 지정 (None이면 단일 대기 시 자동 선택)
         """
         now = time.time()
         valid = {sym: p for sym, p in self._pending.items() if p.expires_at > now}
@@ -168,8 +174,19 @@ class SignalExecutor:
         if not valid:
             return "❌ 유효한 대기 시그널 없음 (2분 초과)"
 
-        # 가장 최근 시그널 선택
-        sym, pending = max(valid.items(), key=lambda x: x[1].expires_at)
+        if signal_id:
+            # ID로 특정 시그널 선택
+            matched = {sym: p for sym, p in valid.items() if p.signal_id == signal_id.lower()}
+            if not matched:
+                lines = [f"  [{p.signal_id}] {sym} {p.signal.direction} ({p.signal.strategy})" for sym, p in valid.items()]
+                return f"❌ 시그널 ID '{signal_id}' 없음. 대기 중:\n" + "\n".join(lines)
+            sym, pending = next(iter(matched.items()))
+        elif len(valid) == 1:
+            sym, pending = next(iter(valid.items()))
+        else:
+            lines = [f"  [{p.signal_id}] {sym} {p.signal.direction} ({p.signal.strategy})" for sym, p in valid.items()]
+            return "⚠️ 대기 중인 시그널이 여러 개입니다. ID를 지정하세요:\n" + "\n".join(lines)
+
         del self._pending[sym]
 
         signal = pending.signal
@@ -200,9 +217,11 @@ class SignalExecutor:
             tp_price = _round_price(avg_price - tp_mult * atr)
             sl_price = _round_price(avg_price + sl_mult * atr)
 
+        # ── 체결 수량 확보 (SL/TP quantity로 사용) ──────────────────────────
+        qty = float(order_resp.get("executedQty") or 0)
+
         # ── 진입 기록 ────────────────────────────────────────────────────────
         if self.trade_logger:
-            qty = float(order_resp.get("executedQty") or 0)
             self.trade_logger.on_entry(
                 signal    = signal,
                 avg_price = avg_price,
@@ -216,7 +235,7 @@ class SignalExecutor:
         # ── SL 주문 (공통) ───────────────────────────────────────────────────
         sl_id = "?"
         try:
-            sl_resp = await self.trader.new_stop_loss_order(sym, close_side, sl_price)
+            sl_resp = await self.trader.new_stop_loss_order(sym, close_side, sl_price, quantity=qty or None)
             sl_id = sl_resp.get("algoId") or sl_resp.get("orderId", "?")
         except Exception as e:
             return (
@@ -230,7 +249,7 @@ class SignalExecutor:
         if mode == "full":
             tp_id = "?"
             try:
-                tp_resp = await self.trader.new_take_profit_order(sym, close_side, tp_price)
+                tp_resp = await self.trader.new_take_profit_order(sym, close_side, tp_price, quantity=qty or None)
                 tp_id = tp_resp.get("algoId") or tp_resp.get("orderId", "?")
             except Exception as e:
                 return (
