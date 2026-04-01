@@ -42,46 +42,48 @@ class BinanceFuturesTrader:
             )
         return await asyncio.to_thread(_call)
 
-    async def new_take_profit_order(self, symbol: str, side: str, stop_price: float) -> dict:
-        """TAKE_PROFIT_MARKET 알고 주문 (POST /fapi/v1/algoOrder, 2025-12-09 이후 필수).
+    async def new_take_profit_order(self, symbol: str, side: str, stop_price: float, quantity: float = None) -> dict:
+        """TAKE_PROFIT_MARKET 알고 주문 (POST /fapi/v1/algoOrder).
         side: 포지션 청산 방향 (LONG→SELL, SHORT→BUY)
         stop_price: 트리거 가격
+        quantity: 청산 수량 (지정 시 해당 수량만 청산, None이면 closePosition=true)
         """
         def _call():
-            return self.client.sign_request(
-                "POST",
-                "/fapi/v1/algoOrder",
-                {
-                    "algoType": "CONDITIONAL",
-                    "symbol": symbol,
-                    "side": side,
-                    "type": "TAKE_PROFIT_MARKET",
-                    "triggerPrice": stop_price,
-                    "closePosition": "true",
-                    "workingType": "MARK_PRICE",
-                },
-            )
+            params = {
+                "algoType": "CONDITIONAL",
+                "symbol": symbol,
+                "side": side,
+                "type": "TAKE_PROFIT_MARKET",
+                "triggerPrice": stop_price,
+                "workingType": "MARK_PRICE",
+            }
+            if quantity is not None:
+                params["quantity"] = quantity
+            else:
+                params["closePosition"] = "true"
+            return self.client.sign_request("POST", "/fapi/v1/algoOrder", params)
         return await asyncio.to_thread(_call)
 
-    async def new_stop_loss_order(self, symbol: str, side: str, stop_price: float) -> dict:
-        """STOP_MARKET 알고 주문 (POST /fapi/v1/algoOrder, 2025-12-09 이후 필수).
+    async def new_stop_loss_order(self, symbol: str, side: str, stop_price: float, quantity: float = None) -> dict:
+        """STOP_MARKET 알고 주문 (POST /fapi/v1/algoOrder).
         side: 포지션 청산 방향 (LONG→SELL, SHORT→BUY)
         stop_price: 트리거 가격
+        quantity: 청산 수량 (지정 시 해당 수량만 청산, None이면 closePosition=true)
         """
         def _call():
-            return self.client.sign_request(
-                "POST",
-                "/fapi/v1/algoOrder",
-                {
-                    "algoType": "CONDITIONAL",
-                    "symbol": symbol,
-                    "side": side,
-                    "type": "STOP_MARKET",
-                    "triggerPrice": stop_price,
-                    "closePosition": "true",
-                    "workingType": "MARK_PRICE",
-                },
-            )
+            params = {
+                "algoType": "CONDITIONAL",
+                "symbol": symbol,
+                "side": side,
+                "type": "STOP_MARKET",
+                "triggerPrice": stop_price,
+                "workingType": "MARK_PRICE",
+            }
+            if quantity is not None:
+                params["quantity"] = quantity
+            else:
+                params["closePosition"] = "true"
+            return self.client.sign_request("POST", "/fapi/v1/algoOrder", params)
         return await asyncio.to_thread(_call)
 
     async def get_open_orders(self, symbol: str = None) -> list:
