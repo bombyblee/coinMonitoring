@@ -24,6 +24,7 @@ dist/
 target/
 dist/
 tradingResults/
+marketSnapshots/
 
 # JetBrains IDE
 .idea/

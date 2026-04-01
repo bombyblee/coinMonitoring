@@ -119,7 +119,7 @@ class StrategyRunner:
                     df_s = _resample(df, strategy.timeframe) if strategy.timeframe != "1min" else df
                     signal = strategy.detect(symbol, df_s)
                     if signal:
-                        await self._maybe_notify(signal)
+                        await self._maybe_notify(signal, strategy.timeframe)
                 except Exception as e:
                     logger.warning(
                         "Strategy %s failed for %s: %s", strategy.name, symbol, e
@@ -129,7 +129,7 @@ class StrategyRunner:
         if self.executor:
             await self.executor.check_swing_exits()
 
-    async def _maybe_notify(self, signal: Signal) -> None:
+    async def _maybe_notify(self, signal: Signal, timeframe: str = "1min") -> None:
         key = (signal.symbol, signal.direction)
         now = time.time()
         if now - self._last_signal.get(key, 0) < self.cooldown_sec:
@@ -141,7 +141,7 @@ class StrategyRunner:
 
         if auto_usdt is not None and self.executor:
             # ── 자동 진입 모드 ────────────────────────────────────────────────
-            self.executor.add_pending(signal)
+            self.executor.add_pending(signal, timeframe=timeframe)
             result = await self.executor.on_confirm("full", usdt_override=auto_usdt)
             msg = (
                 f"🤖 [{signal.strategy}] {signal.symbol} {signal.direction} 자동 진입\n"
@@ -160,7 +160,7 @@ class StrategyRunner:
                 f"(2분 이내 답장)"
             )
             if self.executor:
-                self.executor.add_pending(signal)
+                self.executor.add_pending(signal, timeframe=timeframe)
 
         try:
             await self.messenger.post_message(self.chat_id, msg)

@@ -229,7 +229,7 @@ class TradeLogger:
         path  = self.results_dir / f"trades_{today}.csv"
         rows  = [_to_row(r) for r in self._records]
         fields = list(rows[0].keys())
-        with open(path, "w", newline="", encoding="utf-8") as f:
+        with open(path, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.DictWriter(f, fieldnames=fields)
             writer.writeheader()
             writer.writerows(rows)

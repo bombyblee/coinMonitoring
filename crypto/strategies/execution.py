@@ -3,10 +3,74 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
+
+import pandas as pd
 
 from crypto.orders.parser import OrderIntent
 from .base import Signal
+
+_SNAPSHOT_DIR = Path("marketSnapshots")
+
+
+def _save_snapshot(signal: Signal, store, timeframe: str) -> None:
+    """실제 진입 시점의 market data snapshot을 CSV로 저장."""
+    try:
+        from crypto.market_data.ohlcv_store import _compute as _compute_indicators
+
+        df_1m = store.get(signal.symbol)
+        if df_1m is None or len(df_1m) < 2:
+            return
+
+        if timeframe != "1min":
+            base_df = df_1m[["open", "high", "low", "close", "volume"]].resample(timeframe).agg(
+                open=("open", "first"),
+                high=("high", "max"),
+                low=("low", "min"),
+                close=("close", "last"),
+                volume=("volume", "sum"),
+            ).dropna()
+            df_s = _compute_indicators(base_df)
+        else:
+            df_s = df_1m
+
+        _SNAPSHOT_DIR.mkdir(exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+        base = f"{ts}_{signal.symbol}_{signal.strategy}_{signal.direction}"
+
+        # 전략 timeframe 데이터 (파일명에 timeframe 명시)
+        df_s.tail(100).to_csv(_SNAPSHOT_DIR / f"{base}_{timeframe}.csv", encoding="utf-8-sig")
+
+        # 1분봉 원본은 전략이 1min이 아닐 때만 추가 저장
+        if timeframe != "1min":
+            df_1m.tail(100).to_csv(_SNAPSHOT_DIR / f"{base}_1min.csv", encoding="utf-8-sig")
+
+        row = df_s.iloc[-1]
+        meta = {
+            "timestamp":  ts,
+            "symbol":     signal.symbol,
+            "strategy":   signal.strategy,
+            "direction":  signal.direction,
+            "timeframe":  timeframe,
+            "reason":     signal.reason,
+            "atr":        signal.atr,
+            "tp_mult":    signal.tp_mult,
+            "sl_mult":    signal.sl_mult,
+            "close":      row.get("close"),
+            "rsi_14":     row.get("rsi_14"),
+            "adx_14":     row.get("adx_14"),
+            "ema_5":      row.get("ema_5"),
+            "ema_20":     row.get("ema_20"),
+            "vol_ratio":  row.get("vol_ratio"),
+            "bb_upper":   row.get("bb_upper"),
+            "bb_lower":   row.get("bb_lower"),
+            "zscore_20":  row.get("zscore_20"),
+        }
+        pd.Series(meta).to_csv(_SNAPSHOT_DIR / f"{base}_meta.csv", header=False, encoding="utf-8-sig")
+    except Exception as e:
+        logging.getLogger(__name__).warning("Snapshot 저장 실패: %s", e)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +94,7 @@ class PendingSignal:
     atr: float
     close: float         # 시그널 시점 close (entry 추정용 fallback)
     expires_at: float
+    timeframe: str = "1min"
 
 
 @dataclass
@@ -71,7 +136,7 @@ class SignalExecutor:
 
     # ── 시그널 등록 (StrategyRunner가 호출) ──────────────────────────────────
 
-    def add_pending(self, signal: Signal) -> None:
+    def add_pending(self, signal: Signal, timeframe: str = "1min") -> None:
         df = self.store.get(signal.symbol)
         if df is None or len(df) < 1:
             return
@@ -84,6 +149,7 @@ class SignalExecutor:
             atr=atr,
             close=float(row["close"]),
             expires_at=time.time() + CONFIRM_WINDOW,
+            timeframe=timeframe,
         )
         logger.debug("Pending signal added: %s %s (ATR=%.4f)", signal.symbol, signal.direction, atr)
 
@@ -123,6 +189,9 @@ class SignalExecutor:
         atr = pending.atr
         tp_mult = signal.tp_mult
         sl_mult = signal.sl_mult
+
+        # ── 진입 확정 시점에 snapshot 저장 ──────────────────────────────────
+        _save_snapshot(signal, self.store, pending.timeframe)
 
         if direction == "LONG":
             tp_price = _round_price(avg_price + tp_mult * atr)
