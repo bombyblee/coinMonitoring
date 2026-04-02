@@ -9,9 +9,11 @@ from .base import BaseStrategy, Signal
 from .regime_detector import detect_regime
 from .level_finder import find_levels, Level
 
-_RESAMPLE_TF   = "15min"
-_NEAR_ATR_MULT = 1.2   # 현재가 기준 ±ATR*1.2 이내 레벨만 유효
-_VOL_THRESHOLD = 1.5   # vol_ratio 최소 기준
+_RESAMPLE_TF    = "15min"
+_NEAR_ATR_MULT  = 0.8   # 현재가 기준 ±ATR*0.8 이내 레벨만 유효 (1.2 → 0.8 타이트하게)
+_VOL_THRESHOLD  = 2.0   # vol_ratio 최소 기준 (1.5 → 2.0 강화)
+_MIN_STRENGTH   = 2     # 최소 pivot 터치 수 (1회 터치 약한 레벨 제외)
+_MOMENTUM_ADX   = 28    # MOMENTUM 레짐 최소 ADX (regime 25 위에 추가 필터)
 
 
 def _resample_15m(df: pd.DataFrame) -> pd.DataFrame:
@@ -80,12 +82,16 @@ class LevelAware(BaseStrategy):
         if not nearby:
             return None
 
-        # 가장 가까운 레벨
+        # 가장 가까운 레벨 (강도 최소 기준 필터 적용)
+        nearby = [l for l in nearby if l.strength >= _MIN_STRENGTH]
+        if not nearby:
+            return None
+
         nearest: Level = min(nearby, key=lambda l: abs(l.price - close))
         vol_ok = vol_r >= _VOL_THRESHOLD
 
         # ── MOMENTUM 레짐: 돌파/붕괴 전략 ───────────────────────────────────
-        if regime.mode == "MOMENTUM":
+        if regime.mode == "MOMENTUM" and regime.adx >= _MOMENTUM_ADX:
             # 저항 상향 돌파 → LONG
             if (nearest.kind == "resistance"
                     and close > nearest.price
@@ -126,8 +132,8 @@ class LevelAware(BaseStrategy):
 
         # ── REVERSION 레짐: 반전 전략 ────────────────────────────────────────
         elif regime.mode == "REVERSION":
-            # 지지 반등 → LONG
-            if nearest.kind == "support" and rsi < 40 and vol_ok:
+            # 지지 반등 → LONG (RSI 35 미만으로 강화)
+            if nearest.kind == "support" and rsi < 35 and vol_ok:
                 return Signal(
                     symbol=symbol,
                     direction="LONG",
@@ -142,8 +148,8 @@ class LevelAware(BaseStrategy):
                     sl_mult=self.sl_mult,
                 )
 
-            # 저항 거부 → SHORT
-            if nearest.kind == "resistance" and rsi > 60 and vol_ok:
+            # 저항 거부 → SHORT (RSI 65 초과로 강화)
+            if nearest.kind == "resistance" and rsi > 65 and vol_ok:
                 return Signal(
                     symbol=symbol,
                     direction="SHORT",

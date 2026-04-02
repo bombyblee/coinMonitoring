@@ -34,8 +34,9 @@ class EmaCross(BaseStrategy):
         )
         rsi_ok    = 40 <= row["rsi_14"] <= 70     # 상승 모멘텀 구간, 과열 아님
         volume_ok = row["vol_ratio"] > 1.3
+        adx_ok    = row["adx_14"] >= 25           # 추세 강도 확인
 
-        if golden_cross and rsi_ok and volume_ok:
+        if golden_cross and rsi_ok and volume_ok and adx_ok:
             return Signal(
                 symbol=symbol,
                 direction="LONG",
@@ -57,8 +58,9 @@ class EmaCross(BaseStrategy):
         )
         rsi_ok    = 30 <= row["rsi_14"] <= 60     # 하락 모멘텀 구간, 과매도 아님
         volume_ok = row["vol_ratio"] > 1.3
+        adx_ok    = row["adx_14"] >= 25           # 추세 강도 확인
 
-        if dead_cross and rsi_ok and volume_ok:
+        if dead_cross and rsi_ok and volume_ok and adx_ok:
             return Signal(
                 symbol=symbol,
                 direction="SHORT",

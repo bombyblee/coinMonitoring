@@ -32,8 +32,9 @@ class MomentumBurst(BaseStrategy):
         trend_ok    = (row["ema_5"] > row["ema_20"]
                        and row["close"] > row["ema_20"])                 # 단·중기 정배열
         not_too_hot = row["rsi_14"] < 78 and row["zscore_20"] < 2.2     # 과열 아님
+        adx_ok      = row["adx_14"] >= 25                                # 추세 강도 확인
 
-        if momentum_ok and volume_ok and trend_ok and not_too_hot:
+        if momentum_ok and volume_ok and trend_ok and not_too_hot and adx_ok:
             return Signal(
                 symbol=symbol,
                 direction="LONG",
@@ -53,8 +54,9 @@ class MomentumBurst(BaseStrategy):
         volume_ok    = row["vol_ratio"] > 1.8                            # 거래량 급증
         trend_ok     = row["ema_5"] < row["ema_20"]                      # 단기 < 중기 (역배열)
         not_too_cold = row["rsi_14"] > 22 and row["zscore_20"] > -2.2   # 과매도 아님
+        adx_ok       = row["adx_14"] >= 25                               # 추세 강도 확인
 
-        if momentum_ok and volume_ok and trend_ok and not_too_cold:
+        if momentum_ok and volume_ok and trend_ok and not_too_cold and adx_ok:
             return Signal(
                 symbol=symbol,
                 direction="SHORT",
