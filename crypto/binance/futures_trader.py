@@ -59,6 +59,7 @@ class BinanceFuturesTrader:
             }
             if quantity is not None:
                 params["quantity"] = quantity
+                params["reduceOnly"] = "true"
             else:
                 params["closePosition"] = "true"
             return self.client.sign_request("POST", "/fapi/v1/algoOrder", params)
@@ -81,6 +82,7 @@ class BinanceFuturesTrader:
             }
             if quantity is not None:
                 params["quantity"] = quantity
+                params["reduceOnly"] = "true"
             else:
                 params["closePosition"] = "true"
             return self.client.sign_request("POST", "/fapi/v1/algoOrder", params)

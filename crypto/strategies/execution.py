@@ -136,6 +136,26 @@ class SignalExecutor:
         self._swings: list[SwingMonitor] = []
         self._id_counter: int = 0
 
+    async def get_conflicting_position(self, symbol: str, signal_direction: str) -> str | None:
+        """
+        해당 심볼에 시그널 반대 방향 포지션이 있으면 포지션 방향 반환, 없으면 None.
+        """
+        try:
+            import asyncio
+            pos_list = await asyncio.to_thread(self.trader.client.get_position_risk)
+            for p in pos_list:
+                if p.get("symbol") != symbol:
+                    continue
+                amt = float(p.get("positionAmt", 0))
+                if abs(amt) < 1e-12:
+                    continue
+                pos_direction = "LONG" if amt > 0 else "SHORT"
+                if pos_direction != signal_direction:
+                    return pos_direction
+        except Exception:
+            pass
+        return None
+
     # ── 시그널 등록 (StrategyRunner가 호출) ──────────────────────────────────
 
     def add_pending(self, signal: Signal, timeframe: str = "1min") -> str:

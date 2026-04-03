@@ -140,15 +140,26 @@ class StrategyRunner:
         auto_usdt = self._auto.get(signal.strategy)
 
         if auto_usdt is not None and self.executor:
-            # ── 자동 진입 모드 ────────────────────────────────────────────────
-            self.executor.add_pending(signal, timeframe=timeframe)
-            result = await self.executor.on_confirm("full", usdt_override=auto_usdt)
-            msg = (
-                f"🤖 [{signal.strategy}] {signal.symbol} {signal.direction} 자동 진입\n"
-                f"{signal.reason}\n"
-                f"─\n"
-                f"{result}"
-            )
+            # ── 반대 포지션 체크 ──────────────────────────────────────────────
+            conflict = await self.executor.get_conflicting_position(signal.symbol, signal.direction)
+            if conflict:
+                msg = (
+                    f"⚠️ [{signal.strategy}] {signal.symbol} {signal.direction} 시그널\n"
+                    f"(자동 진입 보류 — {conflict} 포지션 보유 중)\n"
+                    f"{signal.reason}\n"
+                    f"─\n"
+                    f"수동으로 처리하거나 기존 포지션 청산 후 진입하세요."
+                )
+            else:
+                # ── 자동 진입 모드 ────────────────────────────────────────────
+                self.executor.add_pending(signal, timeframe=timeframe)
+                result = await self.executor.on_confirm("full", usdt_override=auto_usdt)
+                msg = (
+                    f"🤖 [{signal.strategy}] {signal.symbol} {signal.direction} 자동 진입\n"
+                    f"{signal.reason}\n"
+                    f"─\n"
+                    f"{result}"
+                )
         else:
             # ── 수동 확인 모드 ────────────────────────────────────────────────
             if self.executor:
