@@ -161,7 +161,7 @@ class TradeLogger:
         exit_fee    = abs(float(trade.get("commission", 0)))
         entry_fee   = record.entry_price * record.quantity * TAKER_FEE_RATE
         fee         = round(entry_fee + exit_fee, 6)
-        net_pnl     = round(gross_pnl - entry_fee, 4)   # exit_fee는 gross_pnl에 이미 반영됨
+        net_pnl     = round(gross_pnl - entry_fee - exit_fee, 4)
 
         exit_ts     = int(trade.get("time", 0))
         exit_time   = (
