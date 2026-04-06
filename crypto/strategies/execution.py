@@ -136,6 +136,16 @@ class SignalExecutor:
         self._swings: list[SwingMonitor] = []
         self._id_counter: int = 0
 
+    def get_open_usdt(self, symbol: str, direction: str) -> float:
+        """열린 포지션의 총 USDT 규모 반환 (trade_logger 기준, add 여부 판단용)."""
+        if not self.trade_logger:
+            return 0.0
+        return sum(
+            r.usdt_size
+            for r in self.trade_logger._records
+            if r.symbol == symbol and r.direction == direction and r.status == "OPEN"
+        )
+
     async def get_conflicting_position(self, symbol: str, signal_direction: str) -> str | None:
         """
         해당 심볼에 시그널 반대 방향 포지션이 있으면 포지션 방향 반환, 없으면 None.

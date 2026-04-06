@@ -7,6 +7,14 @@ import pandas as pd
 from .base import BaseStrategy, Signal
 
 
+# ATR 최소값 필터: 이보다 낮으면 TP/SL 범위가 너무 좁아 노이즈에 즉시 hit됨
+_ATR_MIN: dict[str, float] = {
+    "BTCUSDT": 50.0,
+    "ETHUSDT": 3.0,
+}
+_ATR_MIN_DEFAULT = 1.0
+
+
 class RsiReversal(BaseStrategy):
     """
     RSI 반전 전략 (Mean Reversion).
@@ -21,6 +29,10 @@ class RsiReversal(BaseStrategy):
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         if len(df) < 21:
+            return None
+
+        atr_min = _ATR_MIN.get(symbol, _ATR_MIN_DEFAULT)
+        if float(df.iloc[-1]["atr_14"]) < atr_min:
             return None
 
         prev = df.iloc[-2]

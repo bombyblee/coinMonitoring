@@ -147,6 +147,7 @@ async def main():
         messenger=messenger,
         chat_id=cfg.telegram_chat_id,
         executor=signal_executor,
+        max_symbol_usdt=float(os.getenv("MAX_SYMBOL_USDT_TOTAL", "0")),
     )
     await strategy_runner.start()
     signal_hdl = make_signal_handler(signal_executor, messenger)

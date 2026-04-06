@@ -13,8 +13,10 @@ from .base import BaseStrategy, Signal
 
 logger = logging.getLogger(__name__)
 
-_COOLDOWN_SEC = 300   # 같은 심볼+방향 시그널 재알림 최소 간격 (5분)
-_START_OFFSET = 10    # OhlcvJob 업데이트 후 데이터 준비 대기 (초)
+_COOLDOWN_SEC          = 300    # 같은 심볼+방향 시그널 재알림 최소 간격 (5분)
+_START_OFFSET          = 10     # OhlcvJob 업데이트 후 데이터 준비 대기 (초)
+_MOMENTUM_COOLDOWN_SEC = 7200   # MOMENTUM 신호 레벨별 쿨다운 (2시간)
+_MAX_ADD_COUNT         = 3      # 심볼+방향별 최대 add 횟수
 
 
 def _resample(df: pd.DataFrame, timeframe: str) -> pd.DataFrame:
@@ -33,8 +35,13 @@ class StrategyRunner:
     """
     OhlcvStore를 매 1분마다 읽어 전략 시그널을 체크하고 Telegram으로 알림.
 
-    - 동일 심볼+방향은 cooldown_sec(기본 5분) 동안 중복 알림 없음.
-    - OhlcvJob 보다 _START_OFFSET 초 뒤에 실행해 데이터가 갱신된 뒤 체크.
+    필터 체계 (신호 발화 전 순서대로 적용):
+      1. 기본 쿨다운 (5분, 모든 전략)
+      2. MOMENTUM 쿨다운 (2시간) — add 상황에서만 적용, 포지션 청산 시 자동 해제
+      3. Add 횟수 제한 (심볼+방향 최대 3회)
+      4. MOMENTUM add 엄격 조건 (가격이 레벨+ATR 이상 + zscore 검증)
+      5. REVERSION add ADX 조건 (추세 강화 중 add 금지)
+      6. 누적 USDT 상한선 (심볼+방향 총 오픈 규모 제한)
     """
 
     def __init__(
@@ -44,7 +51,8 @@ class StrategyRunner:
         messenger,
         chat_id: str,
         cooldown_sec: int = _COOLDOWN_SEC,
-        executor=None,   # SignalExecutor (optional)
+        executor=None,            # SignalExecutor (optional)
+        max_symbol_usdt: float = 0.0,  # 0이면 비활성 (심볼+방향별 누적 USDT 상한)
     ):
         self.store = store
         self.strategies = strategies
@@ -52,10 +60,20 @@ class StrategyRunner:
         self.chat_id = chat_id
         self.cooldown_sec = cooldown_sec
         self.executor = executor
+        self.max_symbol_usdt = max_symbol_usdt
+
         self._last_signal: dict[tuple[str, str], float] = {}
         self._auto: dict[str, float] = {}   # strategy name → auto USDT amount
         self._task: Optional[asyncio.Task] = None
         self._stop = asyncio.Event()
+
+        # ── 추가 필터 상태 ────────────────────────────────────────────────────
+        # MOMENTUM 쿨다운: (symbol, direction) → 쿨다운 만료 timestamp
+        self._momentum_cooldown: dict[tuple[str, str], float] = {}
+        # Add 횟수: (symbol, direction) → 현재까지 add된 횟수
+        self._add_count: dict[tuple[str, str], int] = {}
+        # 첫 진입 ADX: (symbol, direction) → 최초 진입 시 ADX (REVERSION add 비교용)
+        self._first_entry_adx: dict[tuple[str, str], float] = {}
 
     # ── public ───────────────────────────────────────────────────────────────
 
@@ -132,10 +150,119 @@ class StrategyRunner:
     async def _maybe_notify(self, signal: Signal, timeframe: str = "1min") -> None:
         key = (signal.symbol, signal.direction)
         now = time.time()
+
+        # ── 기본 쿨다운 (5분) ────────────────────────────────────────────────
         if now - self._last_signal.get(key, 0) < self.cooldown_sec:
             return
+
+        # ── 현재 포지션 규모 확인 (add 여부 판단) ────────────────────────────
+        open_usdt = self.executor.get_open_usdt(signal.symbol, signal.direction) if self.executor else 0.0
+        is_add = open_usdt > 0
+
+        # 포지션이 완전히 청산됐으면 누적 상태 초기화
+        if not is_add:
+            self._momentum_cooldown.pop(key, None)
+            self._add_count.pop(key, None)
+            self._first_entry_adx.pop(key, None)
+
+        is_momentum = "[MOMENTUM]" in signal.reason
+
+        # ── ① MOMENTUM 쿨다운 (2시간) — add 상황에서만 적용 ─────────────────
+        if is_momentum and is_add:
+            expires = self._momentum_cooldown.get(key, 0)
+            if now < expires:
+                logger.debug(
+                    "MOMENTUM 쿨다운 중: %s %s (%.0f초 남음)",
+                    signal.symbol, signal.direction, expires - now,
+                )
+                return
+
+        # ── ② Add 횟수 제한 (최대 3회) ──────────────────────────────────────
+        if is_add:
+            count = self._add_count.get(key, 0)
+            if count >= _MAX_ADD_COUNT:
+                logger.debug(
+                    "Add 횟수 초과 차단: %s %s (%d회 이미 추가됨)",
+                    signal.symbol, signal.direction, count,
+                )
+                return
+
+        # ── ④⑤⑦ Add 신호 엄격 조건 ─────────────────────────────────────────
+        if is_add:
+            df = self.store.get(signal.symbol)
+            if df is not None and len(df) > 0:
+                row = df.iloc[-1]
+                close  = float(row["close"])
+                zscore = float(row.get("zscore_20", 0))
+
+                if is_momentum:
+                    # MOMENTUM add: 가격이 레벨에서 ATR×1 이상 멀어진 상태여야 함
+                    # (레벨 근처 횡보 중 재발화 방지)
+                    if signal.level_price > 0 and signal.atr > 0:
+                        if signal.direction == "LONG":
+                            required = signal.level_price + signal.atr
+                            if close < required:
+                                logger.debug(
+                                    "MOMENTUM LONG add 거부 (레벨+ATR 미달): close=%.4f < %.4f",
+                                    close, required,
+                                )
+                                return
+                        else:  # SHORT
+                            required = signal.level_price - signal.atr
+                            if close > required:
+                                logger.debug(
+                                    "MOMENTUM SHORT add 거부 (레벨-ATR 초과): close=%.4f > %.4f",
+                                    close, required,
+                                )
+                                return
+
+                    # ⑦ MOMENTUM add zscore 검증: 가격이 이미 되돌아간 경우 차단
+                    if signal.direction == "LONG" and zscore < -1.5:
+                        logger.debug(
+                            "MOMENTUM LONG add 거부 (zscore 역전): zscore=%.2f < -1.5", zscore
+                        )
+                        return
+                    if signal.direction == "SHORT" and zscore > 1.5:
+                        logger.debug(
+                            "MOMENTUM SHORT add 거부 (zscore 역전): zscore=%.2f > 1.5", zscore
+                        )
+                        return
+
+                else:
+                    # REVERSION add: ADX가 첫 진입 시점보다 높으면 추세 강화 → 차단
+                    if signal.adx > 0 and key in self._first_entry_adx:
+                        first_adx = self._first_entry_adx[key]
+                        if signal.adx > first_adx:
+                            logger.debug(
+                                "REVERSION add 거부 (ADX 상승 = 추세 강화): %.1f > %.1f",
+                                signal.adx, first_adx,
+                            )
+                            return
+
+        # ── ⑥ 누적 USDT 상한선 ──────────────────────────────────────────────
+        if self.max_symbol_usdt > 0 and open_usdt >= self.max_symbol_usdt:
+            logger.debug(
+                "USDT 상한 초과 차단: %s %s open=%.0f >= max=%.0f",
+                signal.symbol, signal.direction, open_usdt, self.max_symbol_usdt,
+            )
+            return
+
+        # ── 필터 통과 → 쿨다운·카운터 업데이트 후 알림 발송 ─────────────────
         self._last_signal[key] = now
 
+        if is_momentum:
+            self._momentum_cooldown[key] = now + _MOMENTUM_COOLDOWN_SEC
+
+        if not is_add:
+            # 첫 진입: ADX 기록, add 카운터 초기화
+            if signal.adx > 0:
+                self._first_entry_adx[key] = signal.adx
+            self._add_count[key] = 0
+        else:
+            # add: 카운터 증가
+            self._add_count[key] = self._add_count.get(key, 0) + 1
+
+        # ── 알림 발송 ─────────────────────────────────────────────────────────
         emoji = "🟢" if signal.direction == "LONG" else "🔴"
         auto_usdt = self._auto.get(signal.strategy)
 

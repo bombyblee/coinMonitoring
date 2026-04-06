@@ -12,9 +12,11 @@ class Signal:
     direction: str   # "LONG" or "SHORT"
     strategy: str    # strategy name
     reason: str      # condition summary for Telegram message
-    atr: float = 0.0       # detect() 시점 해당 timeframe ATR (executor에서 우선 사용)
-    tp_mult: float = 3.5   # ATR 배수: 익절 (전략별 오버라이드)
-    sl_mult: float = 3.0   # ATR 배수: 손절 (전략별 오버라이드)
+    atr: float = 0.0         # detect() 시점 해당 timeframe ATR (executor에서 우선 사용)
+    tp_mult: float = 3.5     # ATR 배수: 익절 (전략별 오버라이드)
+    sl_mult: float = 3.0     # ATR 배수: 손절 (전략별 오버라이드)
+    level_price: float = 0.0 # 기준 레벨 가격 (LevelAware: add 조건 검증용)
+    adx: float = 0.0         # 신호 시점 ADX (REVERSION add 조건 검증용)
 
 
 class BaseStrategy:

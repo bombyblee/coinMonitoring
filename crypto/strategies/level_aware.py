@@ -9,11 +9,12 @@ from .base import BaseStrategy, Signal
 from .regime_detector import detect_regime
 from .level_finder import find_levels, Level
 
-_RESAMPLE_TF    = "15min"
-_NEAR_ATR_MULT  = 0.8   # 현재가 기준 ±ATR*0.8 이내 레벨만 유효 (1.2 → 0.8 타이트하게)
-_VOL_THRESHOLD  = 2.0   # vol_ratio 최소 기준 (1.5 → 2.0 강화)
-_MIN_STRENGTH   = 2     # 최소 pivot 터치 수 (1회 터치 약한 레벨 제외)
-_MOMENTUM_ADX   = 28    # MOMENTUM 레짐 최소 ADX (regime 25 위에 추가 필터)
+_RESAMPLE_TF           = "15min"
+_NEAR_ATR_MULT         = 0.8   # 현재가 기준 ±ATR*0.8 이내 레벨만 유효 (1.2 → 0.8 타이트하게)
+_VOL_THRESHOLD         = 2.0   # vol_ratio 최소 기준 (1.5 → 2.0 강화)
+_MIN_STRENGTH          = 2     # 최소 pivot 터치 수 (REVERSION용)
+_MOMENTUM_MIN_STRENGTH = 4     # MOMENTUM 진입 시 최소 레벨 강도 (강도:2~3은 신뢰도 낮음)
+_MOMENTUM_ADX          = 28    # MOMENTUM 레짐 최소 ADX (regime 25 위에 추가 필터)
 
 
 def _resample_15m(df: pd.DataFrame) -> pd.DataFrame:
@@ -92,11 +93,12 @@ class LevelAware(BaseStrategy):
 
         # ── MOMENTUM 레짐: 돌파/붕괴 전략 ───────────────────────────────────
         if regime.mode == "MOMENTUM" and regime.adx >= _MOMENTUM_ADX:
-            # 저항 상향 돌파 → LONG
+            # 저항 상향 돌파 → LONG (레벨 강도 최소 4 이상)
             if (nearest.kind == "resistance"
                     and close > nearest.price
                     and vol_ok
-                    and regime.trend_up):
+                    and regime.trend_up
+                    and nearest.strength >= _MOMENTUM_MIN_STRENGTH):
                 return Signal(
                     symbol=symbol,
                     direction="LONG",
@@ -109,13 +111,16 @@ class LevelAware(BaseStrategy):
                     atr=atr,
                     tp_mult=self.tp_mult,
                     sl_mult=self.sl_mult,
+                    level_price=nearest.price,
+                    adx=regime.adx,
                 )
 
-            # 지지 하향 붕괴 → SHORT
+            # 지지 하향 붕괴 → SHORT (레벨 강도 최소 4 이상)
             if (nearest.kind == "support"
                     and close < nearest.price
                     and vol_ok
-                    and not regime.trend_up):
+                    and not regime.trend_up
+                    and nearest.strength >= _MOMENTUM_MIN_STRENGTH):
                 return Signal(
                     symbol=symbol,
                     direction="SHORT",
@@ -128,6 +133,8 @@ class LevelAware(BaseStrategy):
                     atr=atr,
                     tp_mult=self.tp_mult,
                     sl_mult=self.sl_mult,
+                    level_price=nearest.price,
+                    adx=regime.adx,
                 )
 
         # ── REVERSION 레짐: 반전 전략 ────────────────────────────────────────
@@ -146,6 +153,8 @@ class LevelAware(BaseStrategy):
                     atr=atr,
                     tp_mult=self.tp_mult,
                     sl_mult=self.sl_mult,
+                    level_price=nearest.price,
+                    adx=regime.adx,
                 )
 
             # 저항 거부 → SHORT (RSI 65 초과로 강화)
@@ -162,6 +171,8 @@ class LevelAware(BaseStrategy):
                     atr=atr,
                     tp_mult=self.tp_mult,
                     sl_mult=self.sl_mult,
+                    level_price=nearest.price,
+                    adx=regime.adx,
                 )
 
         return None
