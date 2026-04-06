@@ -10,7 +10,7 @@ from typing import Any, Optional
 import pandas as pd
 
 from crypto.orders.parser import OrderIntent
-from .base import Signal
+from strategies.base import Signal
 
 _SNAPSHOT_DIR = Path("marketSnapshots")
 

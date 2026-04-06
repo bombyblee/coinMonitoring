@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from .base import Signal
+from strategies.base import Signal
 
 logger = logging.getLogger(__name__)
 

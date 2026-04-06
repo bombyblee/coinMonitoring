@@ -9,7 +9,7 @@ import pandas as pd
 
 from crypto.market_data import OhlcvStore
 from crypto.market_data.ohlcv_store import _compute as _compute_indicators
-from .base import BaseStrategy, Signal
+from strategies.base import BaseStrategy, Signal
 
 logger = logging.getLogger(__name__)
 

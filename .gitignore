@@ -45,6 +45,7 @@ Thumbs.db
 .env
 .venv
 .csv
+*.xlsx
 
 # Large media files
 *.mp4
