@@ -137,14 +137,19 @@ class SignalExecutor:
         self._id_counter: int = 0
 
     def get_open_usdt(self, symbol: str, direction: str) -> float:
-        """열린 포지션의 총 USDT 규모 반환 (trade_logger 기준, add 여부 판단용)."""
+        """
+        현재 열린 포지션의 USDT 규모 반환 (add 여부 판단 + USDT 상한 체크용).
+
+        trade_logger._open 은 symbol별로 가장 최근에 진입한 레코드 1개만 추적.
+        add 구조에서 이전 레코드들이 _records에 OPEN으로 남는 문제를 방지하기 위해
+        _records 전체 스캔 대신 _open dict만 사용.
+        """
         if not self.trade_logger:
             return 0.0
-        return sum(
-            r.usdt_size
-            for r in self.trade_logger._records
-            if r.symbol == symbol and r.direction == direction and r.status == "OPEN"
-        )
+        record = self.trade_logger._open.get(symbol)
+        if record is None or record.direction != direction:
+            return 0.0
+        return record.usdt_size
 
     async def get_conflicting_position(self, symbol: str, signal_direction: str) -> str | None:
         """
