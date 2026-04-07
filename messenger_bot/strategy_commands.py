@@ -53,13 +53,18 @@ def _status_text(runner) -> str:
     parts.extend(active_lines if active_lines else ["  (없음)"])
     parts.append(f"\n⏹ 비활성 ({len(inactive_lines)}개):")
     parts.extend(inactive_lines if inactive_lines else ["  (없음)"])
+    limit = runner.max_symbol_usdt
+    limit_tag = f"  (상한: {limit:.0f} USDT)" if limit > 0 else "  (상한: 비활성)"
+    parts.append(f"\n🔒 포지션 USDT 상한{limit_tag}")
     parts.append(
         "\n[커맨드]\n"
         "strategy add/del <이름>\n"
         "strategy <이름> tp/sl <배율>   → TP/SL 배율 변경\n"
         "strategy <이름> auto [USDT]  /  strategy <이름> auto off\n"
         "strategy auto on [USDT]  → 전체 자동 진입 활성화\n"
-        "strategy auto off  → 전체 자동 진입 해제"
+        "strategy auto off  → 전체 자동 진입 해제\n"
+        "strategy usdt <금액>  → 심볼+방향 누적 USDT 상한 설정\n"
+        "strategy usdt off    → USDT 상한 비활성화"
     )
     return "\n".join(parts)
 
@@ -195,6 +200,26 @@ def make_strategy_handler(runner, messenger):
                         chat_id, f"❌ {strategy_name} 전략이 실행 중이 아님\n"
                                  f"먼저 strategy add {strategy_name}"
                     )
+
+        # ── strategy usdt <금액|off> ─────────────────────────────────────────
+        elif sub == "usdt":
+            if raw_name.lower() == "off":
+                runner.unset_usdt_limit()
+                await messenger.post_message(chat_id, "✅ 포지션 USDT 상한 비활성화됨")
+            else:
+                try:
+                    usdt = float(raw_name)
+                    if usdt <= 0:
+                        raise ValueError
+                except ValueError:
+                    await messenger.post_message(chat_id, "❌ 양수 금액을 입력하세요 (예: strategy usdt 3000)")
+                    return
+                runner.set_usdt_limit(usdt)
+                await messenger.post_message(
+                    chat_id,
+                    f"✅ 포지션 USDT 상한 → {usdt:.0f} USDT\n"
+                    f"심볼+방향 누적 오픈이 이를 초과하면 신규/add 신호 차단"
+                )
 
         # ── strategy (현황) ──────────────────────────────────────────────────
         else:

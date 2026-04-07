@@ -77,6 +77,14 @@ class StrategyRunner:
 
     # ── public ───────────────────────────────────────────────────────────────
 
+    def set_usdt_limit(self, usdt: float) -> None:
+        """심볼+방향별 누적 오픈 USDT 상한 설정 (0이면 비활성)."""
+        self.max_symbol_usdt = usdt
+
+    def unset_usdt_limit(self) -> None:
+        """누적 오픈 USDT 상한 비활성화."""
+        self.max_symbol_usdt = 0.0
+
     def set_auto(self, strategy_name: str, usdt: float) -> bool:
         """전략 자동 진입 활성화. 전략이 없으면 False 반환."""
         if not any(s.name == strategy_name for s in self.strategies):
