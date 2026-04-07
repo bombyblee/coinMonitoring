@@ -4,12 +4,10 @@ from typing import Optional
 
 import pandas as pd
 
-from crypto.market_data.ohlcv_store import _compute as _compute_indicators
 from .base import BaseStrategy, Signal
 from .regime_detector import detect_regime
 from .level_finder import find_levels, Level
 
-_RESAMPLE_TF           = "15min"
 _NEAR_ATR_MULT         = 0.8   # 현재가 기준 ±ATR*0.8 이내 레벨만 유효 (1.2 → 0.8 타이트하게)
 _VOL_THRESHOLD         = 2.0   # vol_ratio 최소 기준 (1.5 → 2.0 강화)
 _MIN_STRENGTH          = 2     # 최소 pivot 터치 수 (REVERSION용)
@@ -17,25 +15,13 @@ _MOMENTUM_MIN_STRENGTH = 4     # MOMENTUM 진입 시 최소 레벨 강도 (강�
 _MOMENTUM_ADX          = 28    # MOMENTUM 레짐 최소 ADX (regime 25 위에 추가 필터)
 
 
-def _resample_15m(df: pd.DataFrame) -> pd.DataFrame:
-    """1min df → 15min 리샘플 + 지표 재계산."""
-    base = df[["open", "high", "low", "close", "volume"]].resample(_RESAMPLE_TF).agg(
-        open=("open", "first"),
-        high=("high", "max"),
-        low=("low", "min"),
-        close=("close", "last"),
-        volume=("volume", "sum"),
-    ).dropna()
-    return _compute_indicators(base)
-
-
 class LevelAware(BaseStrategy):
     """
     레짐 인식 + 지지/저항 레벨 기반 전략.
 
     데이터 흐름:
-      - 1min df 원본: 1min 진입 지표(RSI, 거래량) 사용
-      - 15min 리샘플: 레짐(ADX) + 레벨(pivot) 탐지에 사용
+      - 15min df: runner가 1분봉을 리샘플해서 전달 (timeframe="15min")
+      - 레짐(ADX) + 레벨(pivot) + 진입 지표(RSI, 거래량) 모두 15min 기준
 
     시그널 로직:
       MOMENTUM (+DI > -DI, ADX≥25):
@@ -48,32 +34,27 @@ class LevelAware(BaseStrategy):
     """
 
     name      = "LevelAware"
-    timeframe = "1min"
+    timeframe = "15min"
     tp_mult   = 3.0
     sl_mult   = 2.5
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
-        if len(df) < 90:   # 15min 6봉 이상 확보 가능한 최소치
+        if len(df) < 50:   # 15min 50봉 이상 확보 (~12시간, 레벨 탐지 최소치)
             return None
 
-        # ── 1min 기준 진입 지표 ──────────────────────────────────────────────
+        # ── 15min 기준 진입 지표 ─────────────────────────────────────────────
         row   = df.iloc[-1]
         close = float(row["close"])
         rsi   = float(row["rsi_14"])
         vol_r = float(row["vol_ratio"])
 
-        # ── 15min 리샘플: 레짐 + 레벨 + ATR ─────────────────────────────────
-        df_15m = _resample_15m(df)
-        if len(df_15m) < 10:
-            return None
-
-        # TP/SL은 15min ATR 기준 (레벨 간격과 스케일 일치)
-        atr = float(df_15m["atr_14"].iloc[-1])
+        # ── ATR / 레짐 / 레벨 ────────────────────────────────────────────────
+        atr = float(df["atr_14"].iloc[-1])
         if atr == 0:
             return None
 
-        regime = detect_regime(df_15m)
-        levels = find_levels(df_15m)
+        regime = detect_regime(df)
+        levels = find_levels(df)
         if not levels:
             return None
 

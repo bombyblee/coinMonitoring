@@ -116,7 +116,7 @@ class OhlcvStore:
     Indicators are recomputed after every update.
     """
 
-    def __init__(self, max_len: int = 500):
+    def __init__(self, max_len: int = 1000):
         self.max_len = max_len
         self._data: dict[str, pd.DataFrame] = {}
 
