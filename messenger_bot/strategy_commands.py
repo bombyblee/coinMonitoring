@@ -13,7 +13,7 @@ _REGISTRY: dict[str, tuple] = {
     "MomentumBurst": (MomentumBurst, "단기 모멘텀 버스트 — 3봉 상승/하락 + 거래량 급증(×1.8) + EMA 추세 | 5min"),
     "RsiReversal":   (RsiReversal,   "RSI 반전 — 과매도/과매수 탈출 + zscore 극단(±1.5) + 거래량 | 1min"),
     "EmaCross":      (EmaCross,      "EMA 골든/데드크로스 — ema5×ema20 돌파 + RSI 범위 + 거래량(×1.3) | 5min"),
-    "LevelAware":    (LevelAware,    "레짐+레벨 — 15min 지지/저항 탐지 + ADX 레짐(모멘텀/리버전) 기반 진입 | 1min"),
+    "LevelAware":    (LevelAware,    "레짐+레벨 — 15min 지지/저항 탐지 + ADX 레짐(모멘텀/리버전) 기반 진입 | 15min"),
 }
 
 _REGISTRY_LOWER: dict[str, str] = {k.lower(): k for k in _REGISTRY}
