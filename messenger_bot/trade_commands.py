@@ -11,7 +11,7 @@ def _allowed_user(update: Update) -> bool:
     allowset = {int(x) for x in allowed.split(",") if x.strip()}
     return update.effective_user and update.effective_user.id in allowset
 
-def make_trade_text_handler(order_service, messenger):
+def make_trade_text_handler(order_service, messenger, state=None):
     async def handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not _allowed_user(update):
             return
@@ -23,6 +23,10 @@ def make_trade_text_handler(order_service, messenger):
         try:
             intent = parse_order_intent(text)
         except Exception:
+            return
+
+        if state and state.trading_paused:
+            await messenger.post_message(chat_id, "⏸ 시스템 중지 중 — /start 로 재개 후 주문하세요.")
             return
 
         try:

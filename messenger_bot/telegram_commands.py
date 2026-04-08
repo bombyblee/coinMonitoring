@@ -76,11 +76,17 @@ _HELP_TEXT = """\
 def make_handlers(state, messenger):
     async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.start()
-        await messenger.post_message(str(update.effective_chat.id), "▶️ 리포트 재개")
+        await messenger.post_message(
+            str(update.effective_chat.id),
+            "▶️ 시스템 재개\n리포트 · 전략 · 자동매매 · 드로우다운 가드 모두 활성화됨"
+        )
 
     async def stop_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         state.stop()
-        await messenger.post_message(str(update.effective_chat.id), "⏸ 리포트 중지")
+        await messenger.post_message(
+            str(update.effective_chat.id),
+            "⏸ 시스템 전체 중지\n리포트 · 전략 시그널 · 자동/수동 주문 · 드로우다운 가드 모두 비활성화됨\n재개: /start"
+        )
 
     return start_cmd, stop_cmd
 

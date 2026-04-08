@@ -62,8 +62,9 @@ def make_watchlist_handler(watchlist, ohlcv_job):
 
             # 즉시 초기화 (다음 tick을 기다리지 않음)
             await ohlcv_job._init_symbol(symbol)
+            candles = ohlcv_job.store.max_len
             await update.message.reply_text(
-                f"✅ {symbol} 추가 완료 (500봉 로드됨)\n"
+                f"✅ {symbol} 추가 완료 ({candles}봉 로드됨)\n"
                 f"현재 {len(watchlist)}/{_MAX_SYMBOLS}개"
             )
             return

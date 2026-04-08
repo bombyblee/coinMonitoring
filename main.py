@@ -101,12 +101,13 @@ async def main():
         messenger=messenger,
         chat_id=cfg.telegram_chat_id,
         threshold_usdt=float(os.getenv("DRAWDOWN_THRESHOLD_USDT", "200")),
+        state=state,
     )
     await drawdown_guard.start()
 
     # trade handler 생성
     order_service = OrderService(trader, risk)
-    trade_handler = make_trade_text_handler(order_service, messenger)
+    trade_handler = make_trade_text_handler(order_service, messenger, state=state)
 
     # freq 텍스트 핸들러 (주기 변경)
     freq_handler = make_freq_text_handler(
@@ -148,6 +149,7 @@ async def main():
         chat_id=cfg.telegram_chat_id,
         executor=signal_executor,
         max_symbol_usdt=float(os.getenv("MAX_SYMBOL_USDT_TOTAL", "0")),
+        state=state,
     )
     await strategy_runner.start()
     signal_hdl = make_signal_handler(signal_executor, messenger)

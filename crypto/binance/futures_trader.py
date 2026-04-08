@@ -92,7 +92,7 @@ class BinanceFuturesTrader:
         """일반 오픈 주문 + 알고 오픈 주문 합산 조회."""
         def _call():
             params = {"symbol": symbol} if symbol else {}
-            regular = self.client.get_open_orders(**params)
+            regular = self.client.get_orders(**params)
 
             algo_resp = self.client.sign_request("GET", "/fapi/v1/openAlgoOrders", params)
             algo_orders = algo_resp.get("orders", []) if isinstance(algo_resp, dict) else []

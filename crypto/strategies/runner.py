@@ -53,6 +53,7 @@ class StrategyRunner:
         cooldown_sec: int = _COOLDOWN_SEC,
         executor=None,            # SignalExecutor (optional)
         max_symbol_usdt: float = 0.0,  # 0이면 비활성 (심볼+방향별 누적 USDT 상한)
+        state=None,               # ReportState (optional, trading_paused 체크용)
     ):
         self.store = store
         self.strategies = strategies
@@ -61,6 +62,7 @@ class StrategyRunner:
         self.cooldown_sec = cooldown_sec
         self.executor = executor
         self.max_symbol_usdt = max_symbol_usdt
+        self.state = state
 
         self._last_signal: dict[tuple[str, str], float] = {}
         self._auto: dict[str, float] = {}   # strategy name → auto USDT amount
@@ -136,6 +138,9 @@ class StrategyRunner:
                 pass
 
     async def _tick(self) -> None:
+        if self.state and self.state.trading_paused:
+            return
+
         for symbol in self.store.symbols():
             df = self.store.get(symbol)
             if df is None or len(df) < 20:

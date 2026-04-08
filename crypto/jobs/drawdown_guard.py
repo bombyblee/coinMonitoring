@@ -23,12 +23,14 @@ class DrawdownGuard:
         chat_id: str,
         threshold_usdt: float = 200.0,
         poll_interval: float = 30.0,
+        state=None,               # ReportState (optional, trading_paused 체크용)
     ):
         self.trader         = trader
         self.messenger      = messenger
         self.chat_id        = chat_id
         self.threshold_usdt = threshold_usdt
         self.poll_interval  = poll_interval
+        self.state          = state
 
         self._initial_margin: Optional[float] = None
         self._triggered = False
@@ -69,6 +71,9 @@ class DrawdownGuard:
             await self._check()
 
     async def _check(self) -> None:
+        if self.state and self.state.trading_paused:
+            return
+
         try:
             acc            = await asyncio.to_thread(self.trader.client.account)
             current_margin = float(acc.get("totalMarginBalance", 0.0))
