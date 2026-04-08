@@ -7,6 +7,7 @@ from .sl_tp_commands import make_sl_tp_handler
 from .watchlist_commands import make_watchlist_handler
 from .signal_commands import make_signal_handler
 from .strategy_commands import make_strategy_handler, make_strategy_cmd
+from .drawdown_commands import make_drawdown_handler
 
 __all__ = [
     "TelegramBot",
@@ -19,4 +20,5 @@ __all__ = [
     "make_signal_handler",
     "make_strategy_handler",
     "make_strategy_cmd",
+    "make_drawdown_handler",
 ]

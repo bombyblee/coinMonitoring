@@ -71,7 +71,7 @@ class DrawdownGuard:
             await self._check()
 
     async def _check(self) -> None:
-        if self.state and self.state.trading_paused:
+        if self.state and not self.state.drawdown_enabled:
             return
 
         try:

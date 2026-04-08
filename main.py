@@ -26,6 +26,7 @@ from messenger_bot import (
     make_signal_handler,
     make_strategy_handler,
     make_strategy_cmd,
+    make_drawdown_handler,
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
 from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob
@@ -154,6 +155,7 @@ async def main():
     await strategy_runner.start()
     signal_hdl = make_signal_handler(signal_executor, messenger)
     strategy_hdl = make_strategy_handler(strategy_runner, messenger)
+    drawdown_hdl = make_drawdown_handler(state, messenger)
 
     # /orders, /help, /strategy 커맨드 핸들러
     app.add_handler(CommandHandler("orders", make_orders_handler(trader, messenger)))
@@ -168,6 +170,7 @@ async def main():
         watchlist_handler=wl_handler,
         signal_handler=signal_hdl,
         strategy_handler=strategy_hdl,
+        drawdown_handler=drawdown_hdl,
     )
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), text_router))
 

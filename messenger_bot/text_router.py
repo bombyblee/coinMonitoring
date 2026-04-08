@@ -16,6 +16,7 @@ class RouterDeps:
     watchlist_handler: Optional[HandlerFn] = None
     signal_handler: Optional[HandlerFn] = None
     strategy_handler: Optional[HandlerFn] = None
+    drawdown_handler: Optional[HandlerFn] = None
     fallback_handler: Optional[HandlerFn] = None
 
 
@@ -32,6 +33,7 @@ def make_text_router(**kwargs) -> HandlerFn:
         watchlist_handler=kwargs.get("watchlist_handler"),
         signal_handler=kwargs.get("signal_handler"),
         strategy_handler=kwargs.get("strategy_handler"),
+        drawdown_handler=kwargs.get("drawdown_handler"),
         fallback_handler=kwargs.get("fallback_handler"),
     )
 
@@ -82,6 +84,12 @@ def make_text_router(**kwargs) -> HandlerFn:
         if lowered.startswith("strategy"):
             if deps.strategy_handler is not None:
                 await deps.strategy_handler(update, context)
+            return
+
+        # drawdown 가드 온/오프
+        if lowered.startswith("drawdown"):
+            if deps.drawdown_handler is not None:
+                await deps.drawdown_handler(update, context)
             return
 
         # signal confirm: "positive [amount]" / "swing [amount]" / "reverse [amount]"
