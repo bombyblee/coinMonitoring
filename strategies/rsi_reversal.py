@@ -24,6 +24,7 @@ class RsiReversal(BaseStrategy):
     """
 
     name = "RsiReversal"
+    timeframe = "15min"
     tp_mult = 2.5
     sl_mult = 2.5
 

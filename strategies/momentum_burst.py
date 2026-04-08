@@ -16,7 +16,7 @@ class MomentumBurst(BaseStrategy):
     """
 
     name = "MomentumBurst"
-    timeframe = "5min"
+    timeframe = "3min"
     tp_mult = 3.5
     sl_mult = 3.0
 
