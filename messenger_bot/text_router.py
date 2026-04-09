@@ -17,6 +17,7 @@ class RouterDeps:
     signal_handler: Optional[HandlerFn] = None
     strategy_handler: Optional[HandlerFn] = None
     drawdown_handler: Optional[HandlerFn] = None
+    close_handler: Optional[HandlerFn] = None
     fallback_handler: Optional[HandlerFn] = None
 
 
@@ -34,6 +35,7 @@ def make_text_router(**kwargs) -> HandlerFn:
         signal_handler=kwargs.get("signal_handler"),
         strategy_handler=kwargs.get("strategy_handler"),
         drawdown_handler=kwargs.get("drawdown_handler"),
+        close_handler=kwargs.get("close_handler"),
         fallback_handler=kwargs.get("fallback_handler"),
     )
 
@@ -90,6 +92,12 @@ def make_text_router(**kwargs) -> HandlerFn:
         if lowered.startswith("drawdown"):
             if deps.drawdown_handler is not None:
                 await deps.drawdown_handler(update, context)
+            return
+
+        # 포지션 청산
+        if lowered.startswith("close"):
+            if deps.close_handler is not None:
+                await deps.close_handler(update, context)
             return
 
         # signal confirm: "positive [amount]" / "swing [amount]" / "reverse [amount]"

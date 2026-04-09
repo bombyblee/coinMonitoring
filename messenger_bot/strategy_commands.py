@@ -10,10 +10,10 @@ from crypto.strategies import MomentumBurst, RsiReversal, EmaCross, LevelAware
 # 텔레그램 커맨드로 런타임 변경 가능: strategy <이름> tp/sl <배율>
 _REGISTRY: dict[str, tuple] = {
     #  이름            클래스          설명
-    "MomentumBurst": (MomentumBurst, "단기 모멘텀 버스트 — 3봉 상승/하락 + 거래량 급증(×1.8) + EMA 추세 | 5min"),
-    "RsiReversal":   (RsiReversal,   "RSI 반전 — 과매도/과매수 탈출 + zscore 극단(±1.5) + 거래량 | 1min"),
-    "EmaCross":      (EmaCross,      "EMA 골든/데드크로스 — ema5×ema20 돌파 + RSI 범위 + 거래량(×1.3) | 5min"),
-    "LevelAware":    (LevelAware,    "레짐+레벨 — 15min 지지/저항 탐지 + ADX 레짐(모멘텀/리버전) 기반 진입 | 15min"),
+    "MomentumBurst": (MomentumBurst, "단기 모멘텀 버스트 — 3봉 상승/하락 + 거래량 급증(×1.8) + EMA 추세"),
+    "RsiReversal":   (RsiReversal,   "RSI 반전 — 과매도/과매수 탈출 + zscore 극단(±1.5) + 거래량"),
+    "EmaCross":      (EmaCross,      "EMA 골든/데드크로스 — ema5×ema20 돌파 + RSI 범위 + 거래량(×1.3)"),
+    "LevelAware":    (LevelAware,    "레짐+레벨 — 지지/저항 탐지 + ADX 레짐(모멘텀/리버전) 기반 진입"),
 }
 
 _REGISTRY_LOWER: dict[str, str] = {k.lower(): k for k in _REGISTRY}
@@ -24,13 +24,13 @@ def _resolve_name(raw: str) -> str | None:
     return _REGISTRY_LOWER.get(raw.lower())
 
 
-def _get_tp_sl(name: str, runner) -> tuple[float, float]:
-    """실행 중인 전략 인스턴스의 tp/sl 반환. 없으면 클래스 기본값."""
+def _get_strategy_attrs(name: str, runner) -> tuple[float, float, str]:
+    """실행 중인 전략 인스턴스의 tp/sl/timeframe 반환. 없으면 클래스 기본값."""
     instance = next((s for s in runner.strategies if s.name == name), None)
     if instance:
-        return instance.tp_mult, instance.sl_mult
+        return instance.tp_mult, instance.sl_mult, instance.timeframe
     cls = _REGISTRY[name][0]
-    return cls.tp_mult, cls.sl_mult
+    return cls.tp_mult, cls.sl_mult, cls.timeframe
 
 
 def _status_text(runner) -> str:
@@ -39,10 +39,10 @@ def _status_text(runner) -> str:
     active_lines = []
     inactive_lines = []
     for name, (_, desc) in _REGISTRY.items():
-        tp, sl = _get_tp_sl(name, runner)
+        tp, sl, tf = _get_strategy_attrs(name, runner)
         auto_usdt = runner._auto.get(name)
         auto_tag  = f"  🤖 auto {auto_usdt:.0f}U" if auto_usdt is not None else ""
-        line = f"  • {name}  TP×{tp}/SL×{sl}{auto_tag}\n    {desc}"
+        line = f"  • {name}  TP×{tp}/SL×{sl}  [{tf}]{auto_tag}\n    {desc}"
         if name in active_names:
             active_lines.append(line)
         else:
