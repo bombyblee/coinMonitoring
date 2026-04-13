@@ -15,12 +15,14 @@ class PnlReporterJob(ReporterJobBase):
 
     async def _fetch_funding_fee(self, symbol: str | None = None) -> float:
         def _call():
-            return self.trader.client.get_income_history(
+            params = dict(
                 incomeType="FUNDING_FEE",
-                symbol=symbol,
                 startTime=self._last_income_ms,
                 limit=1000,
             )
+            if symbol:
+                params["symbol"] = symbol
+            return self.trader.client.get_income_history(**params)
         rows = await asyncio.to_thread(_call)
         total = 0.0
         newest = self._last_income_ms
