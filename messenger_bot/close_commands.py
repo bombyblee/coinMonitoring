@@ -31,11 +31,12 @@ def make_close_handler(trader, messenger):
             await messenger.post_message(chat_id, f"❌ 포지션 조회 실패: {e}")
             return
 
-        live = [
-            (p["symbol"], float(p["positionAmt"]))
-            for p in pos_list
-            if abs(float(p.get("positionAmt", 0))) > 1e-12
-        ]
+        live = sorted(
+            [(p["symbol"], float(p["positionAmt"]))
+             for p in pos_list
+             if abs(float(p.get("positionAmt", 0))) > 1e-12],
+            key=lambda x: x[0]  # 심볼명 알파벳 고정 정렬 (리포트와 동일 기준)
+        )
 
         if not live:
             await messenger.post_message(chat_id, "📭 현재 오픈 포지션 없음")

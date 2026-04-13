@@ -111,6 +111,8 @@ class PnlReporterJob(ReporterJobBase):
             liq = p.get("liquidationPrice")
             live.append((sym, amt, entry, u, lev, liq))
             symbols.append(sym)
+        live.sort(key=lambda x: x[0])  # 심볼명 알파벳 고정 정렬
+        symbols = [x[0] for x in live]
 
         # 3) last prices + funding rates
         last_map, rate_map = await asyncio.gather(
