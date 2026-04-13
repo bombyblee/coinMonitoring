@@ -28,6 +28,7 @@ from messenger_bot import (
     make_strategy_cmd,
     make_drawdown_handler,
     make_close_handler,
+    make_autolist_handler,
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
 from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob
@@ -129,10 +130,14 @@ async def main():
     watchlist = Watchlist(
         os.getenv("WATCHLIST_SYMBOLS", "BTCUSDT,ETHUSDT").split(",")
     )
+    # 전략 실행 대상 심볼 (워치리스트의 부분집합)
+    autolist = Watchlist(
+        os.getenv("AUTOLIST_SYMBOLS", "").split(",") if os.getenv("AUTOLIST_SYMBOLS") else []
+    )
     ohlcv_store = OhlcvStore(max_len=1500)
     ohlcv_job = OhlcvJob(watchlist=watchlist, store=ohlcv_store)
     await ohlcv_job.start()
-    wl_handler = make_watchlist_handler(watchlist, ohlcv_job)
+    wl_handler = make_watchlist_handler(watchlist, ohlcv_job, autolist=autolist)
 
     signal_executor = SignalExecutor(
         order_service=order_service,
@@ -152,12 +157,14 @@ async def main():
         executor=signal_executor,
         max_symbol_usdt=float(os.getenv("MAX_SYMBOL_USDT_TOTAL", "0")),
         state=state,
+        autolist=autolist,
     )
     await strategy_runner.start()
     signal_hdl = make_signal_handler(signal_executor, messenger)
     strategy_hdl = make_strategy_handler(strategy_runner, messenger)
     drawdown_hdl = make_drawdown_handler(state, messenger)
     close_hdl = make_close_handler(trader, messenger)
+    autolist_hdl = make_autolist_handler(autolist, watchlist, messenger)
 
     # /orders, /help, /strategy 커맨드 핸들러
     app.add_handler(CommandHandler("orders", make_orders_handler(trader, messenger)))
@@ -174,6 +181,7 @@ async def main():
         strategy_handler=strategy_hdl,
         drawdown_handler=drawdown_hdl,
         close_handler=close_hdl,
+        autolist_handler=autolist_hdl,
     )
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), text_router))
 

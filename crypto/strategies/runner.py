@@ -54,6 +54,7 @@ class StrategyRunner:
         executor=None,            # SignalExecutor (optional)
         max_symbol_usdt: float = 0.0,  # 0이면 비활성 (심볼+방향별 누적 USDT 상한)
         state=None,               # ReportState (optional, trading_paused 체크용)
+        autolist=None,            # Watchlist (optional) — 전략 실행 대상 심볼 필터
     ):
         self.store = store
         self.strategies = strategies
@@ -63,6 +64,7 @@ class StrategyRunner:
         self.executor = executor
         self.max_symbol_usdt = max_symbol_usdt
         self.state = state
+        self.autolist = autolist
 
         self._last_signal: dict[tuple[str, str], float] = {}
         self._auto: dict[str, float] = {}   # strategy name → auto USDT amount
@@ -141,7 +143,8 @@ class StrategyRunner:
         if self.state and self.state.trading_paused:
             return
 
-        for symbol in self.store.symbols():
+        active_symbols = self.autolist.symbols() if self.autolist else self.store.symbols()
+        for symbol in active_symbols:
             df = self.store.get(symbol)
             if df is None or len(df) < 20:
                 continue

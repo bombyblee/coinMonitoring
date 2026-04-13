@@ -13,7 +13,7 @@ _HELP = (
 )
 
 
-def make_watchlist_handler(watchlist, ohlcv_job):
+def make_watchlist_handler(watchlist, ohlcv_job, autolist=None):
     """
     watchlist  — 현재 심볼 목록
     watchlist add BTCUSDT  — 추가 (최대 10개, 다음 tick에 자동 초기화)
@@ -77,8 +77,11 @@ def make_watchlist_handler(watchlist, ohlcv_job):
                 return
             # store에서도 즉시 제거
             ohlcv_job.store.remove(symbol)
+            # autolist에도 있으면 함께 제거
+            auto_removed = autolist.remove(symbol) if autolist else False
+            auto_tag = "  (오토리스트에서도 제거됨)" if auto_removed else ""
             await update.message.reply_text(
-                f"✅ {symbol} 제거 완료\n"
+                f"✅ {symbol} 제거 완료{auto_tag}\n"
                 f"현재 {len(watchlist)}/{_MAX_SYMBOLS}개"
             )
             return

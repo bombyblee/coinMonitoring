@@ -18,6 +18,7 @@ class RouterDeps:
     strategy_handler: Optional[HandlerFn] = None
     drawdown_handler: Optional[HandlerFn] = None
     close_handler: Optional[HandlerFn] = None
+    autolist_handler: Optional[HandlerFn] = None
     fallback_handler: Optional[HandlerFn] = None
 
 
@@ -36,6 +37,7 @@ def make_text_router(**kwargs) -> HandlerFn:
         strategy_handler=kwargs.get("strategy_handler"),
         drawdown_handler=kwargs.get("drawdown_handler"),
         close_handler=kwargs.get("close_handler"),
+        autolist_handler=kwargs.get("autolist_handler"),
         fallback_handler=kwargs.get("fallback_handler"),
     )
 
@@ -92,6 +94,12 @@ def make_text_router(**kwargs) -> HandlerFn:
         if lowered.startswith("drawdown"):
             if deps.drawdown_handler is not None:
                 await deps.drawdown_handler(update, context)
+            return
+
+        # 오토리스트
+        if lowered.startswith("autolist"):
+            if deps.autolist_handler is not None:
+                await deps.autolist_handler(update, context)
             return
 
         # 포지션 청산
