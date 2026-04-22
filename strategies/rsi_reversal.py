@@ -25,8 +25,9 @@ class RsiReversal(BaseStrategy):
 
     name = "RsiReversal"
     timeframe = "15min"
-    tp_mult = 2.5
-    sl_mult = 2.5
+    tp_mult = 1.5
+    sl_mult = 1.5
+
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         if len(df) < 21:
