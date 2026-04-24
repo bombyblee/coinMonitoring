@@ -17,7 +17,6 @@ from crypto.jobs import ReportState, FuturesReporterJob, PnlReporterJob, Drawdow
 
 from messenger_bot import (
     TelegramBot,
-    make_telegram_handlers,
     make_text_router,
     make_trade_text_handler,
     make_freq_text_handler,
@@ -31,8 +30,8 @@ from messenger_bot import (
     make_autolist_handler,
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
-from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob
-from crypto.strategies import MomentumBurst, StrategyRunner, SignalExecutor, RsiReversal, EmaCross, LevelAware
+from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob, LiquidationStream
+from crypto.strategies import MomentumBurst, StrategyRunner, SignalExecutor, RsiReversal, EmaCross, LevelAware, LiquidationTrap
 from crypto.strategies.trade_logger import TradeLogger
 
 async def main():
@@ -160,6 +159,25 @@ async def main():
         autolist=autolist,
     )
     await strategy_runner.start()
+
+    # 청산 추적 전략
+    liq_trap = LiquidationTrap(
+        executor=signal_executor,
+        trader=trader,
+        store=ohlcv_store,
+        messenger=messenger,
+        chat_id=cfg.telegram_chat_id,
+        book_ratio=float(os.getenv("LIQ_TRAP_BOOK_RATIO", "0.3")),
+        book_levels=int(os.getenv("LIQ_TRAP_BOOK_LEVELS", "20")),
+        min_depth_usdt=float(os.getenv("LIQ_TRAP_MIN_DEPTH_USDT", "50000")),
+        window_sec=float(os.getenv("LIQ_TRAP_WINDOW_SEC", "30")),
+        cooldown_sec=float(os.getenv("LIQ_TRAP_COOLDOWN_SEC", "300")),
+        autolist=autolist,
+        state=state,
+    )
+    liq_stream = LiquidationStream()
+    await liq_stream.start(liq_trap.on_liquidation)
+
     signal_hdl = make_signal_handler(signal_executor, messenger)
     strategy_hdl = make_strategy_handler(strategy_runner, messenger)
     drawdown_hdl = make_drawdown_handler(state, messenger)
@@ -198,6 +216,7 @@ async def main():
     finally:
         await trade_logger.stop()
         await uds.stop()
+        await liq_stream.stop()
         await sl_tp_monitor.stop()
         await strategy_runner.stop()
         await ohlcv_job.stop()

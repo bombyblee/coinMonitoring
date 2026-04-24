@@ -3,5 +3,6 @@ from .momentum_burst import MomentumBurst
 from .rsi_reversal import RsiReversal
 from .ema_cross import EmaCross
 from .level_aware import LevelAware
+from .liquidation_trap import LiquidationTrap
 
-__all__ = ["BaseStrategy", "Signal", "MomentumBurst", "RsiReversal", "EmaCross", "LevelAware"]
+__all__ = ["BaseStrategy", "Signal", "MomentumBurst", "RsiReversal", "EmaCross", "LevelAware", "LiquidationTrap"]
