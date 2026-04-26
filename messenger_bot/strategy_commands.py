@@ -33,7 +33,7 @@ def _get_strategy_attrs(name: str, runner) -> tuple[float, float, str]:
     return cls.tp_mult, cls.sl_mult, cls.timeframe
 
 
-def _status_text(runner) -> str:
+def _status_text(runner, liq_trap=None) -> str:
     active_names = {s.name for s in runner.strategies}
 
     active_lines = []
@@ -53,6 +53,16 @@ def _status_text(runner) -> str:
     parts.extend(active_lines if active_lines else ["  (없음)"])
     parts.append(f"\n⏹ 비활성 ({len(inactive_lines)}개):")
     parts.extend(inactive_lines if inactive_lines else ["  (없음)"])
+
+    if liq_trap is not None:
+        al = liq_trap.autolist.symbols() if liq_trap.autolist else ["전체"]
+        parts.append(
+            f"\n⚡ LiquidationTrap  TP×{liq_trap.tp_mult}/SL×{liq_trap.sl_mult}\n"
+            f"    depth비율≥{liq_trap.book_ratio:.0%}  minDepth=${liq_trap.min_depth_usdt:,.0f}"
+            f"  윈도우{liq_trap.window_sec:.0f}s  쿨다운{liq_trap.cooldown_sec:.0f}s\n"
+            f"    대상: {', '.join(al)}"
+        )
+
     limit = runner.max_symbol_usdt
     limit_tag = f"  (상한: {limit:.0f} USDT)" if limit > 0 else "  (상한: 비활성)"
     parts.append(f"\n🔒 포지션 USDT 상한{limit_tag}")
@@ -69,7 +79,7 @@ def _status_text(runner) -> str:
     return "\n".join(parts)
 
 
-def make_strategy_handler(runner, messenger):
+def make_strategy_handler(runner, messenger, liq_trap=None):
     """
     텍스트 명령 처리:
       'strategy'                     → 현황 조회
@@ -223,17 +233,17 @@ def make_strategy_handler(runner, messenger):
 
         # ── strategy (현황) ──────────────────────────────────────────────────
         else:
-            await messenger.post_message(chat_id, _status_text(runner))
+            await messenger.post_message(chat_id, _status_text(runner, liq_trap))
 
     return handler
 
 
-def make_strategy_cmd(runner, messenger):
+def make_strategy_cmd(runner, messenger, liq_trap=None):
     """/strategy 슬래시 커맨드 — 현황 조회."""
 
     async def cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
             return
-        await messenger.post_message(str(update.effective_chat.id), _status_text(runner))
+        await messenger.post_message(str(update.effective_chat.id), _status_text(runner, liq_trap))
 
     return cmd

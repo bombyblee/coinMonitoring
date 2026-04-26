@@ -31,7 +31,8 @@ from messenger_bot import (
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
 from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob, LiquidationStream
-from crypto.strategies import MomentumBurst, StrategyRunner, SignalExecutor, RsiReversal, EmaCross, LevelAware, LiquidationTrap
+from strategies import MomentumBurst, RsiReversal, EmaCross, LevelAware, LiquidationTrap
+from crypto.strategies import StrategyRunner, SignalExecutor
 from crypto.strategies.trade_logger import TradeLogger
 
 async def main():
@@ -179,7 +180,7 @@ async def main():
     await liq_stream.start(liq_trap.on_liquidation)
 
     signal_hdl = make_signal_handler(signal_executor, messenger)
-    strategy_hdl = make_strategy_handler(strategy_runner, messenger)
+    strategy_hdl = make_strategy_handler(strategy_runner, messenger, liq_trap=liq_trap)
     drawdown_hdl = make_drawdown_handler(state, messenger)
     close_hdl = make_close_handler(trader, messenger)
     autolist_hdl = make_autolist_handler(autolist, watchlist, messenger)
@@ -187,7 +188,7 @@ async def main():
     # /orders, /help, /strategy 커맨드 핸들러
     app.add_handler(CommandHandler("orders", make_orders_handler(trader, messenger)))
     app.add_handler(CommandHandler("help", make_help_handler(messenger)))
-    app.add_handler(CommandHandler("strategy", make_strategy_cmd(strategy_runner, messenger)))
+    app.add_handler(CommandHandler("strategy", make_strategy_cmd(strategy_runner, messenger, liq_trap=liq_trap)))
 
     # text_router 생성 (각 명령어 핸들러 라우팅)
     text_router = make_text_router(
