@@ -28,6 +28,7 @@ from messenger_bot import (
     make_drawdown_handler,
     make_close_handler,
     make_autolist_handler,
+    make_liqtrap_handler,
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
 from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob, LiquidationStream
@@ -184,6 +185,7 @@ async def main():
     drawdown_hdl = make_drawdown_handler(state, messenger)
     close_hdl = make_close_handler(trader, messenger)
     autolist_hdl = make_autolist_handler(autolist, watchlist, messenger)
+    liqtrap_hdl = make_liqtrap_handler(liq_trap, messenger)
 
     # /orders, /help, /strategy 커맨드 핸들러
     app.add_handler(CommandHandler("orders", make_orders_handler(trader, messenger)))
@@ -201,6 +203,7 @@ async def main():
         drawdown_handler=drawdown_hdl,
         close_handler=close_hdl,
         autolist_handler=autolist_hdl,
+        liqtrap_handler=liqtrap_hdl,
     )
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), text_router))
 

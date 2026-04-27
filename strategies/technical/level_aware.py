@@ -4,7 +4,7 @@ from typing import Optional
 
 import pandas as pd
 
-from .base import BaseStrategy, Signal
+from ..base import BaseStrategy, Signal
 from .regime_detector import detect_regime
 from .level_finder import find_levels, Level
 

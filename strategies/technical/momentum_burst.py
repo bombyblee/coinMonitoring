@@ -4,7 +4,7 @@ from typing import Optional
 
 import pandas as pd
 
-from .base import BaseStrategy, Signal
+from ..base import BaseStrategy, Signal
 
 
 class MomentumBurst(BaseStrategy):

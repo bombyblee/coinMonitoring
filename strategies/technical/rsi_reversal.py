@@ -4,7 +4,7 @@ from typing import Optional
 
 import pandas as pd
 
-from .base import BaseStrategy, Signal
+from ..base import BaseStrategy, Signal
 
 
 # ATR 최소값 필터: 이보다 낮으면 TP/SL 범위가 너무 좁아 노이즈에 즉시 hit됨
@@ -27,7 +27,6 @@ class RsiReversal(BaseStrategy):
     timeframe = "15min"
     tp_mult = 1.5
     sl_mult = 1.5
-
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
         if len(df) < 21:

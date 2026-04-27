@@ -5,13 +5,14 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import Optional
 
-from .base import Signal
+from ..base import Signal
 
 logger = logging.getLogger(__name__)
 
 # 기본값
-_BOOK_RATIO      = 0.3     # 누적 청산 / 호가 depth 비율 임계값
+_BOOK_RATIO      = 2.0     # 누적 청산 / 호가 depth 비율 임계값
 _BOOK_LEVELS     = 20      # 호가 몇 레벨 합산할지
 _MIN_DEPTH_USDT  = 50_000  # depth 하한 — 이보다 얇으면 비율 무시 (허수/유동성 회수 방어)
 _WINDOW_SEC      = 30      # 청산 누적 롤링 윈도우 (초)
@@ -61,6 +62,7 @@ class LiquidationTrap:
       window_sec  : 청산 누적 롤링 윈도우 (기본 30초)
       cooldown_sec: 심볼+방향 재신호 쿨다운 (기본 5분)
       autolist    : 지정 시 해당 심볼만 처리 (None이면 전체)
+      auto_usdt   : 자동 진입 USDT 금액. None이면 수동 확인 신호만 발송.
     """
 
     name    = "LiquidationTrap"
@@ -70,7 +72,7 @@ class LiquidationTrap:
     def __init__(
         self,
         executor,
-        trader,            # BinanceFuturesTrader (depth 조회용)
+        trader,
         store,
         messenger,
         chat_id: str,
@@ -91,9 +93,12 @@ class LiquidationTrap:
         self.book_levels    = book_levels
         self.min_depth_usdt = min_depth_usdt
         self.window_sec     = window_sec
-        self.cooldown_sec = cooldown_sec
+        self.cooldown_sec   = cooldown_sec
         self.autolist    = autolist
         self.state       = state
+
+        # 자동 진입 USDT — None이면 수동 확인 신호만 발송
+        self.auto_usdt: Optional[float] = None
 
         self._acc: dict[tuple, _Accumulator] = defaultdict(_Accumulator)
         self._last_signal: dict[tuple, float] = {}
@@ -132,7 +137,6 @@ class LiquidationTrap:
         # 호가 depth 조회 후 비율 체크
         depth_usdt = await self._fetch_depth_usdt(symbol, side)
         if depth_usdt < self.min_depth_usdt:
-            # 호가가 너무 얇음 — 유동성 회수 또는 잡코인 허수 가능성
             logger.debug(
                 "depth too thin, skip %s %s  depth=%.0f < min=%.0f",
                 symbol, direction, depth_usdt, self.min_depth_usdt,
@@ -190,11 +194,9 @@ class LiquidationTrap:
             sl_mult = self.sl_mult,
         )
 
-        auto_usdt = getattr(self.executor, "auto_usdt", None)
-
-        if auto_usdt:
+        if self.auto_usdt is not None:
             self.executor.add_pending(signal)
-            result = await self.executor.on_confirm("full", usdt_override=auto_usdt)
+            result = await self.executor.on_confirm("full", usdt_override=self.auto_usdt)
             msg = (
                 f"🤖 [{self.name}] {symbol} {direction} 자동 진입\n"
                 f"{signal.reason}\n─\n{result}"
