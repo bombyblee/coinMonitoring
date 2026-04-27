@@ -6,17 +6,19 @@ from telegram.ext import ContextTypes
 _HELP = (
     "📌 오토리스트 명령어\n"
     "  autolist               — 현재 목록 조회\n"
-    "  autolist add <심볼>    — 전략 실행 심볼 추가\n"
+    "  autolist add <심볼>    — 전략 실행 심볼 추가 (워치리스트 없으면 자동 추가)\n"
     "  autolist del <심볼>    — 전략 실행 심볼 제거\n\n"
     "※ 오토리스트에 있는 심볼만 전략 시그널 대상이 됩니다.\n"
     "  OHLCV 수집은 워치리스트 기준으로 계속 유지됩니다."
 )
 
+_MAX_WATCHLIST = 10
 
-def make_autolist_handler(autolist, watchlist, messenger):
+
+def make_autolist_handler(autolist, watchlist, messenger, ohlcv_job=None):
     """
     autolist           — 현재 목록 조회
-    autolist add <심볼> — 추가 (워치리스트에 없으면 거부)
+    autolist add <심볼> — 추가 (워치리스트에 없으면 자동으로 워치리스트에도 추가)
     autolist del <심볼> — 제거
     """
 
@@ -49,17 +51,27 @@ def make_autolist_handler(autolist, watchlist, messenger):
 
         # ── 추가 ─────────────────────────────────────────────────────────────
         if action == "add":
+            wl_added_msg = ""
             if symbol not in watchlist:
-                await messenger.post_message(
-                    chat_id,
-                    f"❌ {symbol} 은 워치리스트에 없습니다.\n"
-                    f"먼저 `watchlist add {symbol}` 로 추가하세요."
-                )
-                return
+                if len(watchlist) >= _MAX_WATCHLIST:
+                    await messenger.post_message(
+                        chat_id,
+                        f"❌ 워치리스트가 가득 찼습니다 (최대 {_MAX_WATCHLIST}개).\n"
+                        f"먼저 `watchlist del <심볼>`로 하나를 제거하세요."
+                    )
+                    return
+                watchlist.add(symbol)
+                if ohlcv_job is not None:
+                    await ohlcv_job._init_symbol(symbol)
+                    candles = ohlcv_job.store.max_len
+                    wl_added_msg = f"  (워치리스트에도 추가, {candles}봉 로드)"
+                else:
+                    wl_added_msg = "  (워치리스트에도 추가)"
+
             if autolist.add(symbol):
                 await messenger.post_message(
                     chat_id,
-                    f"✅ {symbol} 오토리스트 추가\n현재 {len(autolist.symbols())}개"
+                    f"✅ {symbol} 오토리스트 추가{wl_added_msg}\n현재 {len(autolist.symbols())}개"
                 )
             else:
                 await messenger.post_message(chat_id, f"ℹ️ {symbol} 은 이미 오토리스트에 있습니다.")

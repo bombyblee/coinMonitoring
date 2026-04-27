@@ -163,19 +163,21 @@ async def main():
     await strategy_runner.start()
 
     # 청산 추적 전략
+    _liq_kw = {}
+    if os.getenv("LIQ_TRAP_BOOK_RATIO"):     _liq_kw["book_ratio"]     = float(os.getenv("LIQ_TRAP_BOOK_RATIO"))
+    if os.getenv("LIQ_TRAP_BOOK_LEVELS"):    _liq_kw["book_levels"]    = int(os.getenv("LIQ_TRAP_BOOK_LEVELS"))
+    if os.getenv("LIQ_TRAP_MIN_DEPTH_USDT"): _liq_kw["min_depth_usdt"] = float(os.getenv("LIQ_TRAP_MIN_DEPTH_USDT"))
+    if os.getenv("LIQ_TRAP_WINDOW_SEC"):     _liq_kw["window_sec"]     = float(os.getenv("LIQ_TRAP_WINDOW_SEC"))
+    if os.getenv("LIQ_TRAP_COOLDOWN_SEC"):   _liq_kw["cooldown_sec"]   = float(os.getenv("LIQ_TRAP_COOLDOWN_SEC"))
     liq_trap = LiquidationTrap(
         executor=signal_executor,
         trader=trader,
         store=ohlcv_store,
         messenger=messenger,
         chat_id=cfg.telegram_chat_id,
-        book_ratio=float(os.getenv("LIQ_TRAP_BOOK_RATIO", "0.3")),
-        book_levels=int(os.getenv("LIQ_TRAP_BOOK_LEVELS", "20")),
-        min_depth_usdt=float(os.getenv("LIQ_TRAP_MIN_DEPTH_USDT", "50000")),
-        window_sec=float(os.getenv("LIQ_TRAP_WINDOW_SEC", "30")),
-        cooldown_sec=float(os.getenv("LIQ_TRAP_COOLDOWN_SEC", "300")),
         autolist=autolist,
         state=state,
+        **_liq_kw,
     )
     liq_stream = LiquidationStream()
     await liq_stream.start(liq_trap.on_liquidation)
@@ -184,7 +186,7 @@ async def main():
     strategy_hdl = make_strategy_handler(strategy_runner, messenger, liq_trap=liq_trap)
     drawdown_hdl = make_drawdown_handler(state, messenger)
     close_hdl = make_close_handler(trader, messenger)
-    autolist_hdl = make_autolist_handler(autolist, watchlist, messenger)
+    autolist_hdl = make_autolist_handler(autolist, watchlist, messenger, ohlcv_job=ohlcv_job)
     liqtrap_hdl = make_liqtrap_handler(liq_trap, messenger)
 
     # /orders, /help, /strategy 커맨드 핸들러
