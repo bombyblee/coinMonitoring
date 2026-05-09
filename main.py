@@ -135,7 +135,7 @@ async def main():
     autolist = Watchlist(
         os.getenv("AUTOLIST_SYMBOLS", "").split(",") if os.getenv("AUTOLIST_SYMBOLS") else []
     )
-    ohlcv_store = OhlcvStore(max_len=1500)
+    ohlcv_store = OhlcvStore(max_len=7680)  # 512 × 15min봉 확보 (Chronos용)
     ohlcv_job = OhlcvJob(watchlist=watchlist, store=ohlcv_store)
     await ohlcv_job.start()
     wl_handler = make_watchlist_handler(watchlist, ohlcv_job, autolist=autolist)

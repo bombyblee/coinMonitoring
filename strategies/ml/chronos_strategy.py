@@ -38,7 +38,7 @@ class ChronosStrategy(BaseStrategy):
     """
 
     name      = "Chronos"
-    timeframe = "5min"
+    timeframe = "15min"
     tp_mult   = 3.0
     sl_mult   = 2.5
 

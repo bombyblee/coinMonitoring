@@ -11,9 +11,10 @@ from .ohlcv_store import OhlcvStore
 
 logger = logging.getLogger(__name__)
 
-_INTERVAL = "1m"
-_TICK_SEC = 60          # polling interval
-_INIT_FETCH = 3         # extra candles fetched on updates (latest may be forming)
+_INTERVAL        = "1m"
+_TICK_SEC        = 60    # polling interval
+_INIT_FETCH      = 3     # extra candles fetched on updates (latest may be forming)
+_BINANCE_MAX_LIMIT = 1500  # Binance API hard limit per klines request
 
 
 class OhlcvJob:
@@ -105,7 +106,7 @@ class OhlcvJob:
     async def _init_symbol(self, symbol: str) -> None:
         try:
             raw = await asyncio.to_thread(
-                self._fetch_klines, symbol, self.store.max_len
+                self._fetch_klines_bulk, symbol, self.store.max_len
             )
             self.store.init_symbol(symbol, raw)
             logger.info("OhlcvJob: initialised %s (%d candles)", symbol, len(raw))
@@ -127,3 +128,31 @@ class OhlcvJob:
             "/fapi/v1/klines",
             params={"symbol": symbol, "interval": _INTERVAL, "limit": limit},
         )
+
+    def _fetch_klines_bulk(self, symbol: str, total: int) -> list:
+        """1500개 한도를 넘는 경우 startTime 기반으로 페이지네이션해서 시계열 순 반환."""
+        if total <= _BINANCE_MAX_LIMIT:
+            return self._fetch_klines(symbol, total)
+
+        all_rows: list = []
+        now_ms   = int(time.time() * 1000)
+        start_ms = now_ms - total * 60 * 1000  # total 분 전부터 시작
+
+        while len(all_rows) < total:
+            chunk = min(_BINANCE_MAX_LIMIT, total - len(all_rows))
+            rows = self._http.get(
+                "/fapi/v1/klines",
+                params={
+                    "symbol":    symbol,
+                    "interval":  _INTERVAL,
+                    "startTime": start_ms,
+                    "limit":     chunk,
+                },
+            )
+            if not rows:
+                break
+            all_rows.extend(rows)
+            # 마지막 캔들 open_time + 1분 → 다음 배치 시작점
+            start_ms = int(rows[-1][0]) + 60_000
+
+        return all_rows
