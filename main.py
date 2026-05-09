@@ -32,7 +32,7 @@ from messenger_bot import (
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
 from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob, LiquidationStream
-from strategies import MomentumBurst, RsiReversal, EmaCross, LevelAware, LiquidationTrap
+from strategies import MomentumBurst, RsiReversal, EmaCross, LevelAware, LiquidationTrap, ChronosStrategy
 from crypto.strategies import StrategyRunner, SignalExecutor
 from crypto.strategies.trade_logger import TradeLogger
 
@@ -152,7 +152,7 @@ async def main():
 
     strategy_runner = StrategyRunner(
         store=ohlcv_store,
-        strategies=[MomentumBurst(), RsiReversal(), EmaCross(), LevelAware()],
+        strategies=[MomentumBurst(), RsiReversal(), EmaCross(), LevelAware(), ChronosStrategy()],
         messenger=messenger,
         chat_id=cfg.telegram_chat_id,
         executor=signal_executor,
