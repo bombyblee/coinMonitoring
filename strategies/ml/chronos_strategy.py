@@ -45,6 +45,7 @@ class ChronosStrategy(BaseStrategy):
     def __init__(self, tp_mult: float = None, sl_mult: float = None):
         super().__init__(tp_mult=tp_mult, sl_mult=sl_mult)
         self._pipeline = None
+        self._last_candle_ts: dict[str, pd.Timestamp] = {}  # symbol → 마지막 추론한 닫힌 봉 ts
 
     # ── model ────────────────────────────────────────────────────────────────
 
@@ -65,8 +66,14 @@ class ChronosStrategy(BaseStrategy):
     # ── detect ────────────────────────────────────────────────────────────────
 
     def detect(self, symbol: str, df: pd.DataFrame) -> Optional[Signal]:
-        if len(df) < 20:
+        if len(df) < 21:  # 닫힌 봉 최소 20개 필요
             return None
+
+        # 마지막 행은 현재 형성 중인 봉 → 제외하고 닫힌 봉만 사용
+        df_closed = df.iloc[:-1]
+        last_ts = df_closed.index[-1]
+        if self._last_candle_ts.get(symbol) == last_ts:
+            return None  # 새 봉이 닫히지 않았으면 스킵
 
         if self._pipeline is None:
             try:
@@ -76,8 +83,8 @@ class ChronosStrategy(BaseStrategy):
                 return None
 
         # 가용 데이터 전부 사용, 최대 _MAX_CONTEXT(512)로 제한
-        context_len = min(len(df), _MAX_CONTEXT)
-        close = df["close"].values[-context_len:].astype(float)
+        context_len = min(len(df_closed), _MAX_CONTEXT)
+        close = df_closed["close"].values[-context_len:].astype(float)
         current_price = close[-1]
 
         try:
@@ -109,7 +116,9 @@ class ChronosStrategy(BaseStrategy):
             )
             return None
 
-        row = df.iloc[-1]
+        self._last_candle_ts[symbol] = last_ts
+
+        row = df_closed.iloc[-1]
         atr = float(row.get("atr_14", 0))
 
         reason = (
