@@ -1,8 +1,7 @@
 
-certifi==2023.5.7
-
 # --- core ---
 python-dotenv>=1.0.0
+certifi>=2023.5.7
 
 # --- http ---
 requests>=2.31.0
@@ -13,10 +12,15 @@ python-telegram-bot==21.6
 # --- binance futures trading ---
 binance-futures-connector>=1.6.0
 
-# --- websocket (fills stream용, 정석으로 갈 때) ---
+# --- websocket ---
 websockets>=12.0
-# ---- binance futures trading ----
-binance-futures-connector>=1.6.0
 
 # --- data ---
 pandas>=2.0.0
+numpy>=1.24.0
+
+# --- ml (Chronos strategy) ---
+# CPU-only torch: pip install torch --index-url https://download.pytorch.org/whl/cpu
+# CUDA torch:    pip install torch --index-url https://download.pytorch.org/whl/cu124
+torch>=2.11.0
+chronos-forecasting>=2.2.0
