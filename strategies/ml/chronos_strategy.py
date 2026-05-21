@@ -109,44 +109,25 @@ class ChronosStrategy(BaseStrategy):
         pct_change       = (median_val - current_price) / current_price
         confidence_range = (p90 - p10) / current_price  # 불확실도 (좁을수록 확실)
 
-        if confidence_range > _MAX_UNCERTAINTY:
-            logger.debug(
-                "Chronos 불확실도 초과 차단 (%s): %.3f%% > %.3f%%",
-                symbol, confidence_range * 100, _MAX_UNCERTAINTY * 100,
-            )
-            return None
-
         self._last_candle_ts[symbol] = last_ts
 
         row = df_closed.iloc[-1]
         atr = float(row.get("atr_14", 0))
 
+        uncertainty_flag = "⚠️ 불확실" if confidence_range > _MAX_UNCERTAINTY else "✅ 확실"
         reason = (
             f"현재가={current_price:.4f}  예측={median_val:.4f}\n"
-            f"예측변화={pct_change:.3%}  불확실도={confidence_range:.3%}\n"
+            f"예측변화={pct_change:+.3%}  불확실도={confidence_range:.3%} {uncertainty_flag}\n"
             f"모델={_MODEL_ID.split('/')[-1]}  ctx={context_len}봉  horizon={_HORIZON}봉"
         )
 
-        if pct_change >= _THRESHOLD:
-            return Signal(
-                symbol=symbol,
-                direction="LONG",
-                strategy=self.name,
-                reason=reason,
-                atr=atr,
-                tp_mult=self.tp_mult,
-                sl_mult=self.sl_mult,
-            )
-
-        if pct_change <= -_THRESHOLD:
-            return Signal(
-                symbol=symbol,
-                direction="SHORT",
-                strategy=self.name,
-                reason=reason,
-                atr=atr,
-                tp_mult=self.tp_mult,
-                sl_mult=self.sl_mult,
-            )
-
-        return None
+        direction = "LONG" if pct_change >= 0 else "SHORT"
+        return Signal(
+            symbol=symbol,
+            direction=direction,
+            strategy=self.name,
+            reason=reason,
+            atr=atr,
+            tp_mult=self.tp_mult,
+            sl_mult=self.sl_mult,
+        )
