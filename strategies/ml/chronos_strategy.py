@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 _MODEL_ID   = os.getenv("CHRONOS_MODEL",      "amazon/chronos-t5-small")
 _MAX_CONTEXT = int(os.getenv("CHRONOS_CONTEXT",   "512"))   # 모델 최대 context (512 권장)
 _HORIZON    = int(os.getenv("CHRONOS_HORIZON",    "12"))    # 예측 스텝 수 (5min봉 기준 1시간)
-_THRESHOLD       = float(os.getenv("CHRONOS_THRESHOLD",       "0.005"))  # 시그널 발생 임계값 (0.5%)
+_THRESHOLD       = float(os.getenv("CHRONOS_THRESHOLD",       "0.05"))   # 시그널 발생 임계값 (5%)
 _MAX_UNCERTAINTY = float(os.getenv("CHRONOS_MAX_UNCERTAINTY", "0.025"))  # 불확실도 상한 (2.5%)
 _SAMPLES         = int(os.getenv("CHRONOS_SAMPLES",           "20"))     # 확률 샘플 수
 
@@ -110,6 +110,9 @@ class ChronosStrategy(BaseStrategy):
         confidence_range = (p90 - p10) / current_price  # 불확실도 (좁을수록 확실)
 
         self._last_candle_ts[symbol] = last_ts
+
+        if abs(pct_change) < _THRESHOLD:
+            return None  # 예측 변화율이 임계값 미만이면 알림 생략
 
         row = df_closed.iloc[-1]
         atr = float(row.get("atr_14", 0))
