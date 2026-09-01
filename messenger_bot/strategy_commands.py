@@ -60,7 +60,7 @@ def _status_text(runner, liq_trap=None) -> str:
             f"\n⚡ LiquidationTrap  TP×{liq_trap.tp_mult}/SL×{liq_trap.sl_mult}\n"
             f"    depth비율≥{liq_trap.book_ratio:.0%}  minDepth=${liq_trap.min_depth_usdt:,.0f}"
             f"  윈도우{liq_trap.window_sec:.0f}s  쿨다운{liq_trap.cooldown_sec:.0f}s\n"
-            f"    대상: {', '.join(al)}"
+            f"    탐지: 워치리스트 전체  |  자동진입 허용: {', '.join(al)}"
         )
 
     limit = runner.max_symbol_usdt

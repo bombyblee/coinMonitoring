@@ -54,7 +54,9 @@ class StrategyRunner:
         executor=None,            # SignalExecutor (optional)
         max_symbol_usdt: float = 0.0,  # 0이면 비활성 (심볼+방향별 누적 USDT 상한)
         state=None,               # ReportState (optional, trading_paused 체크용)
-        autolist=None,            # Watchlist (optional) — 전략 실행 대상 심볼 필터
+        autolist=None,            # Watchlist (optional) — 자동 진입(auto) 허용 심볼 필터.
+                                   # 시그널 탐지/알림은 store(=watchlist) 전체 심볼 대상이며,
+                                   # autolist는 자동매매 실행 여부만 게이팅한다.
     ):
         self.store = store
         self.strategies = strategies
@@ -143,7 +145,8 @@ class StrategyRunner:
         if self.state and self.state.trading_paused:
             return
 
-        active_symbols = self.autolist.symbols() if self.autolist else self.store.symbols()
+        # 시그널 탐지는 watchlist(store에 데이터가 쌓인) 심볼 전체를 대상으로 한다.
+        active_symbols = self.store.symbols()
         for symbol in active_symbols:
             df = self.store.get(symbol)
             if df is None or len(df) < 20:
@@ -281,8 +284,10 @@ class StrategyRunner:
         # ── 알림 발송 ─────────────────────────────────────────────────────────
         emoji = "🟢" if signal.direction == "LONG" else "🔴"
         auto_usdt = self._auto.get(signal.strategy)
+        # autolist는 자동 진입 가능 여부만 게이팅 (비어있으면 전체 허용)
+        auto_eligible = not self.autolist or signal.symbol in self.autolist
 
-        if auto_usdt is not None and self.executor:
+        if auto_usdt is not None and self.executor and auto_eligible:
             # ── 반대 포지션 체크 ──────────────────────────────────────────────
             conflict = await self.executor.get_conflicting_position(signal.symbol, signal.direction)
             if conflict:
@@ -319,8 +324,13 @@ class StrategyRunner:
                     f"'positive' → TP(x{signal.tp_mult}) + SL(x{signal.sl_mult}) 자동 주문\n"
                     f"'swing' → SL(x{signal.sl_mult})만 + 추세 반전 알림"
                 )
+            auto_note = (
+                "(오토리스트 미등록 — 자동 진입 대상 아님, 수동 확인 필요)\n"
+                if auto_usdt is not None and not auto_eligible else ""
+            )
             msg = (
                 f"{emoji} [{signal.strategy}] {signal.symbol} {signal.direction} 시그널\n"
+                f"{auto_note}"
                 f"{signal.reason}\n"
                 f"─\n"
                 f"{confirm_hint}\n"

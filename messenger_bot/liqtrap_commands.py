@@ -12,7 +12,7 @@ def _status_text(liq_trap) -> str:
         f"  TP×{liq_trap.tp_mult} / SL×{liq_trap.sl_mult}{auto_tag}\n"
         f"  depth비율≥{liq_trap.book_ratio:.0%}  minDepth=${liq_trap.min_depth_usdt:,.0f}\n"
         f"  윈도우 {liq_trap.window_sec:.0f}s  쿨다운 {liq_trap.cooldown_sec:.0f}s\n"
-        f"  대상: {', '.join(al)}\n"
+        f"  탐지: 워치리스트 전체  |  자동진입 허용: {', '.join(al)}\n"
         "\n[커맨드]\n"
         "liqtrap auto <USDT>  → 자동 진입 활성화\n"
         "liqtrap auto off     → 자동 진입 해제\n"

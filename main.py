@@ -131,7 +131,8 @@ async def main():
     watchlist = Watchlist(
         os.getenv("WATCHLIST_SYMBOLS", "BTCUSDT,ETHUSDT").split(",")
     )
-    # 전략 실행 대상 심볼 (워치리스트의 부분집합)
+    # 자동 진입(자동매매) 허용 심볼 (워치리스트의 부분집합).
+    # 시그널 탐지/알림은 watchlist 전체 대상이며, autolist는 자동매매 실행 여부만 게이팅한다.
     autolist = Watchlist(
         os.getenv("AUTOLIST_SYMBOLS", "").split(",") if os.getenv("AUTOLIST_SYMBOLS") else []
     )

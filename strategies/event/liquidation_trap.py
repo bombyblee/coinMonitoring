@@ -61,7 +61,8 @@ class LiquidationTrap:
       book_levels : 호가 레벨 수 (기본 20)
       window_sec  : 청산 누적 롤링 윈도우 (기본 30초)
       cooldown_sec: 심볼+방향 재신호 쿨다운 (기본 5분)
-      autolist    : 지정 시 해당 심볼만 처리 (None이면 전체)
+      autolist    : 자동 진입 허용 심볼 필터 (지정 시 해당 심볼만 자동 진입, None/빈 값이면 전체 허용).
+                    탐지/알림 자체는 store(=watchlist)에 데이터가 있는 심볼 전체를 대상으로 한다.
       auto_usdt   : 자동 진입 USDT 금액. None이면 수동 확인 신호만 발송.
     """
 
@@ -118,7 +119,8 @@ class LiquidationTrap:
         if not symbol or avg_price <= 0 or filled_qty <= 0:
             return
 
-        if self.autolist and symbol not in self.autolist:
+        # 탐지 대상은 watchlist(store에 데이터가 쌓인 심볼) 전체 — autolist는 자동 진입만 게이팅
+        if symbol not in self.store.symbols():
             return
 
         usdt = avg_price * filled_qty
@@ -194,7 +196,10 @@ class LiquidationTrap:
             sl_mult = self.sl_mult,
         )
 
-        if self.auto_usdt is not None:
+        # autolist는 자동 진입 가능 여부만 게이팅 (비어있으면 전체 허용)
+        auto_eligible = not self.autolist or symbol in self.autolist
+
+        if self.auto_usdt is not None and auto_eligible:
             self.executor.add_pending(signal)
             result = await self.executor.on_confirm("full", usdt_override=self.auto_usdt)
             msg = (
@@ -204,8 +209,13 @@ class LiquidationTrap:
         else:
             signal_id = self.executor.add_pending(signal)
             id_tag = f" [{signal_id}]" if signal_id else ""
+            auto_note = (
+                "(오토리스트 미등록 — 자동 진입 대상 아님, 수동 확인 필요)\n"
+                if self.auto_usdt is not None and not auto_eligible else ""
+            )
             msg = (
                 f"🔴 [{self.name}] {symbol} {direction} 신호{id_tag}\n"
+                f"{auto_note}"
                 f"{signal.reason}\n─\n"
                 f"'positive{id_tag}' → TP×{self.tp_mult} + SL×{self.sl_mult}\n"
                 f"'swing{id_tag}' → SL만 + 추세 반전 알림\n"
