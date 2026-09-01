@@ -61,7 +61,6 @@ async def main():
 
     risk = RiskConfig(
         max_usdt_per_order=float(os.getenv("MAX_USDT_PER_ORDER")),
-        allowed_symbols=set((os.getenv("ALLOWED_SYMBOLS")).split(",")),
     )
 
     # trade logger (trader는 userTrades 폴링용)

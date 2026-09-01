@@ -8,7 +8,6 @@ _FINAL = {"FILLED", "CANCELED", "REJECTED", "EXPIRED"}
 @dataclass(frozen=True)
 class RiskConfig:
     max_usdt_per_order: float = 200.0
-    allowed_symbols: set[str] = None
 
 class OrderService:
     def __init__(self, trader, risk: RiskConfig):
@@ -40,8 +39,6 @@ class OrderService:
         return qty
 
     async def place(self, intent: OrderIntent) -> dict:
-        if self.risk.allowed_symbols and intent.symbol not in self.risk.allowed_symbols:
-            raise ValueError(f"심볼 허용 안 됨: {intent.symbol}")
         if intent.usdt_amount > self.risk.max_usdt_per_order:
             raise ValueError(f"주문 금액 제한 초과: {intent.usdt_amount} > {self.risk.max_usdt_per_order}")
 
