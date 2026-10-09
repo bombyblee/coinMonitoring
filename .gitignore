@@ -25,6 +25,8 @@ target/
 dist/
 tradingResults/
 marketSnapshots/
+data/
+*.db
 
 # JetBrains IDE
 .idea/

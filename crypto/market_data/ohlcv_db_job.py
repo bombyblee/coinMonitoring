@@ -6,11 +6,12 @@ import time
 from typing import Optional
 
 from crypto.binance.http_client import HttpClient
-from .ohlcv_db import Ohlcv5mRepository
+from .ohlcv_db import INTERVAL, INTERVAL_MS, Ohlcv5mRepository
+from .kline_fetch import fetch_and_store_range
 
 logger = logging.getLogger(__name__)
 
-_INTERVAL   = "5m"
+_INTERVAL   = INTERVAL
 _TICK_SEC   = 300    # 5분 polling interval
 _FETCH_LIMIT = 3     # 마지막 캔들은 forming 중일 수 있어 여유 있게 조회
 
@@ -40,6 +41,7 @@ class Ohlcv5mDbJob:
     async def start(self) -> None:
         self._stop.clear()
         await asyncio.to_thread(self.db.init_schema)
+        await self._catch_up_all()
         self._task = asyncio.create_task(self._run(), name="ohlcv_5m_db_job")
 
     async def stop(self) -> None:
@@ -74,6 +76,44 @@ class Ohlcv5mDbJob:
                 await self._update_symbol(sym)
             except Exception as e:
                 logger.warning("Ohlcv5mDbJob: update failed for %s: %s", sym, e)
+
+    # ── startup catch-up ─────────────────────────────────────────────────────
+
+    async def _catch_up_all(self) -> None:
+        """
+        봇이 꺼져 있던 동안 쌓인 공백을 기동 시 한 번 메운다.
+        (마지막 저장된 open_time ~ 현재까지, 심볼별로 순차 처리)
+        """
+        for sym in self.symbols:
+            try:
+                await asyncio.to_thread(self._catch_up_symbol, sym)
+            except Exception as e:
+                logger.warning("Ohlcv5mDbJob: catch-up failed for %s: %s", sym, e)
+
+    def _catch_up_symbol(self, symbol: str) -> None:
+        now_ms = int(time.time() * 1000)
+        latest = self.db.get_latest_open_time(symbol)
+        if latest is None:
+            logger.info(
+                "Ohlcv5mDbJob: %s has no existing data yet — run "
+                "scripts/backfill_ohlcv_5m.py for full history",
+                symbol,
+            )
+            return
+
+        start_ms = latest + INTERVAL_MS
+        if now_ms - start_ms < INTERVAL_MS:
+            return  # 이미 최신
+
+        logger.info(
+            "Ohlcv5mDbJob: %s catching up from %s",
+            symbol,
+            time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(start_ms / 1000)),
+        )
+        added = fetch_and_store_range(
+            self._http, self.db, symbol, _INTERVAL, INTERVAL_MS, start_ms, now_ms
+        )
+        logger.info("Ohlcv5mDbJob: %s catch-up done (+%d rows)", symbol, added)
 
     # ── helpers ───────────────────────────────────────────────────────────────
 

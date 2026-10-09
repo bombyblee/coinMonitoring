@@ -1,5 +1,5 @@
 """
-BTC/ETH/XRP 5개년치 5분봉(klines)을 바이낸스 선물 API에서 받아 로컬 SQLite DB에 저장한다.
+BTC/ETH/XRP 5개년치 5분봉(klines)을 바이낸스 선물 API에서 받아 로컬 DuckDB에 저장한다.
 
 사용법:
     python scripts/backfill_ohlcv_5m.py                  # 기본 심볼(BTCUSDT,ETHUSDT,XRPUSDT)
@@ -17,16 +17,13 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from crypto.binance.http_client import HttpClient
-from crypto.market_data.ohlcv_db import DEFAULT_DB_PATH, DEFAULT_SYMBOLS, Ohlcv5mRepository
+from crypto.market_data.ohlcv_db import DEFAULT_DB_PATH, DEFAULT_SYMBOLS, INTERVAL, INTERVAL_MS, Ohlcv5mRepository
+from crypto.market_data.kline_fetch import fetch_and_store_range
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("backfill_ohlcv_5m")
 
-_INTERVAL = "5m"
-_INTERVAL_MS = 5 * 60 * 1000
-_MAX_LIMIT = 1500
 _YEARS = 5
-_SLEEP_BETWEEN_REQ = 0.3  # 레이트리밋 여유
 
 
 def backfill_symbol(http: HttpClient, db: Ohlcv5mRepository, symbol: str) -> None:
@@ -35,43 +32,10 @@ def backfill_symbol(http: HttpClient, db: Ohlcv5mRepository, symbol: str) -> Non
 
     latest = db.get_latest_open_time(symbol)
     if latest is not None:
-        start_ms = max(start_ms, latest + _INTERVAL_MS)
+        start_ms = max(start_ms, latest + INTERVAL_MS)
         logger.info("%s: 기존 DB 데이터 이후부터 이어받기 (open_time=%d)", symbol, latest)
 
-    cursor = start_ms
-    total = 0
-    while cursor < now_ms:
-        rows = http.get(
-            "/fapi/v1/klines",
-            params={
-                "symbol": symbol,
-                "interval": _INTERVAL,
-                "startTime": cursor,
-                "limit": _MAX_LIMIT,
-            },
-        )
-        if not rows:
-            break
-
-        # 아직 마감되지 않은(forming) 캔들은 저장하지 않음
-        closed = [r for r in rows if int(r[0]) + _INTERVAL_MS <= now_ms]
-        if closed:
-            total += db.upsert_klines(symbol, closed)
-
-        next_cursor = int(rows[-1][0]) + _INTERVAL_MS
-        if next_cursor <= cursor:
-            break  # 진행이 없으면 중단 (안전장치)
-        cursor = next_cursor
-
-        logger.info(
-            "%s: %s 까지 수집 (누적 %d행, DB 전체 %d행)",
-            symbol,
-            time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(cursor / 1000)),
-            total,
-            db.count(symbol),
-        )
-        time.sleep(_SLEEP_BETWEEN_REQ)
-
+    fetch_and_store_range(http, db, symbol, INTERVAL, INTERVAL_MS, start_ms, now_ms)
     logger.info("%s: 완료 (DB 전체 %d행)", symbol, db.count(symbol))
 
 

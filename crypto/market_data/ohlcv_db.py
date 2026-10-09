@@ -7,6 +7,8 @@ import duckdb
 
 DEFAULT_DB_PATH = os.getenv("OHLCV_DB_PATH", "data/market_data.duckdb")
 DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "XRPUSDT"]
+INTERVAL = "5m"
+INTERVAL_MS = 5 * 60 * 1000
 
 
 class Ohlcv5mRepository:
