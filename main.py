@@ -31,7 +31,7 @@ from messenger_bot import (
     make_liqtrap_handler,
 )
 from crypto.orders.sl_tp_monitor import SlTpMonitor
-from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob, LiquidationStream
+from crypto.market_data import Watchlist, OhlcvStore, OhlcvJob, LiquidationStream, Ohlcv5mRepository, Ohlcv5mDbJob, DEFAULT_SYMBOLS
 from strategies import MomentumBurst, RsiReversal, EmaCross, LevelAware, LiquidationTrap, ChronosStrategy
 from crypto.strategies import StrategyRunner, SignalExecutor
 from crypto.strategies.trade_logger import TradeLogger
@@ -140,6 +140,12 @@ async def main():
     await ohlcv_job.start()
     wl_handler = make_watchlist_handler(watchlist, ohlcv_job, autolist=autolist)
 
+    # (C-1) BTC/ETH/XRP 5분봉 로컬 DB 영구 저장 (watchlist와 무관하게 항상 동작)
+    db_symbols = os.getenv("DB_OHLCV_SYMBOLS", ",".join(DEFAULT_SYMBOLS)).split(",")
+    ohlcv_db = Ohlcv5mRepository()
+    ohlcv_db_job = Ohlcv5mDbJob(symbols=db_symbols, db=ohlcv_db)
+    await ohlcv_db_job.start()
+
     signal_executor = SignalExecutor(
         order_service=order_service,
         trader=trader,
@@ -226,6 +232,7 @@ async def main():
         await sl_tp_monitor.stop()
         await strategy_runner.stop()
         await ohlcv_job.stop()
+        await ohlcv_db_job.stop()
         await pnl_job.stop()
         await drawdown_guard.stop()
         await price_job.stop()
