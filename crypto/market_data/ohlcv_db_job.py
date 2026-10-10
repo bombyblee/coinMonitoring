@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 _INTERVAL   = INTERVAL
 _TICK_SEC   = 300    # 5분 polling interval
 _FETCH_LIMIT = 3     # 마지막 캔들은 forming 중일 수 있어 여유 있게 조회
+_CATCH_UP_DAYS = 90  # 기동 시 다시 받아와 구멍을 메울 최근 구간
+_TAIL_TOPUP_DAYS = 1  # 심볼별 캐치업을 순차 처리하는 동안 흐른 시간만큼의 꼬리 공백 마무리
 
 
 class Ohlcv5mDbJob:
@@ -34,21 +36,29 @@ class Ohlcv5mDbJob:
         self.db = db
         self._http = http or HttpClient(base_url="https://fapi.binance.com")
         self._task: Optional[asyncio.Task] = None
+        self._catchup_task: Optional[asyncio.Task] = None
         self._stop = asyncio.Event()
 
     # ── public ───────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
+        """
+        캐치업은 백그라운드 태스크로 돌리고 바로 반환한다 — 캐치업이 오래 걸려도
+        main.py의 나머지 기동 순서(전략 러너, Telegram 폴링 등)를 막지 않는다.
+        5분 polling 루프도 캐치업과 별개로 바로 시작된다.
+        """
         self._stop.clear()
         await asyncio.to_thread(self.db.init_schema)
-        await self._catch_up_all()
+        self._catchup_task = asyncio.create_task(self._catch_up_all(), name="ohlcv_5m_catchup")
         self._task = asyncio.create_task(self._run(), name="ohlcv_5m_db_job")
 
     async def stop(self) -> None:
         self._stop.set()
+        if self._catchup_task:
+            self._catchup_task.cancel()
         if self._task:
             self._task.cancel()
-            await asyncio.sleep(0)
+        await asyncio.sleep(0)
 
     # ── internal loop ─────────────────────────────────────────────────────────
 
@@ -81,39 +91,38 @@ class Ohlcv5mDbJob:
 
     async def _catch_up_all(self) -> None:
         """
-        봇이 꺼져 있던 동안 쌓인 공백을 기동 시 한 번 메운다.
-        (마지막 저장된 open_time ~ 현재까지, 심볼별로 순차 처리)
+        기동 시 최근 _CATCH_UP_DAYS일 구간 전체를 다시 받아 upsert한다.
+        (마지막 저장 시점 이후뿐 아니라, 그 구간 중간에 생긴 결측 캔들도 함께 메워진다)
+
+        심볼을 순차로 처리하므로, 전체 캐치업이 오래 걸리면 먼저 처리된 심볼에는
+        그 사이 흐른 시간만큼 꼬리 공백이 생길 수 있다 — 모든 심볼의 1차 캐치업이
+        끝난 뒤 짧은 구간(1일)으로 한 번 더 돌려서 그 꼬리를 마무리로 메운다.
         """
         for sym in self.symbols:
             try:
-                await asyncio.to_thread(self._catch_up_symbol, sym)
+                await asyncio.to_thread(self._catch_up_symbol, sym, _CATCH_UP_DAYS)
             except Exception as e:
                 logger.warning("Ohlcv5mDbJob: catch-up failed for %s: %s", sym, e)
 
-    def _catch_up_symbol(self, symbol: str) -> None:
+        for sym in self.symbols:
+            try:
+                await asyncio.to_thread(self._catch_up_symbol, sym, _TAIL_TOPUP_DAYS)
+            except Exception as e:
+                logger.warning("Ohlcv5mDbJob: tail top-up failed for %s: %s", sym, e)
+
+    def _catch_up_symbol(self, symbol: str, days: int) -> None:
         now_ms = int(time.time() * 1000)
-        latest = self.db.get_latest_open_time(symbol)
-        if latest is None:
-            logger.info(
-                "Ohlcv5mDbJob: %s has no existing data yet — run "
-                "scripts/backfill_ohlcv_5m.py for full history",
-                symbol,
-            )
-            return
+        start_ms = now_ms - days * 24 * 60 * 60 * 1000
 
-        start_ms = latest + INTERVAL_MS
-        if now_ms - start_ms < INTERVAL_MS:
-            return  # 이미 최신
-
+        logger.info("Ohlcv5mDbJob: %s catch-up (최근 %d일 재조회)", symbol, days)
+        n = fetch_and_store_range(
+            self._http, self.db, symbol, _INTERVAL, INTERVAL_MS, start_ms, now_ms,
+            log_progress=False,
+        )
         logger.info(
-            "Ohlcv5mDbJob: %s catching up from %s",
-            symbol,
-            time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(start_ms / 1000)),
+            "Ohlcv5mDbJob: %s catch-up done (%d rows upserted, DB 전체 %d행)",
+            symbol, n, self.db.count(symbol),
         )
-        added = fetch_and_store_range(
-            self._http, self.db, symbol, _INTERVAL, INTERVAL_MS, start_ms, now_ms
-        )
-        logger.info("Ohlcv5mDbJob: %s catch-up done (+%d rows)", symbol, added)
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
